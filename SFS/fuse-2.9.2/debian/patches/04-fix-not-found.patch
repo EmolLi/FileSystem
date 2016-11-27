@@ -1,0 +1,68 @@
+From 1061a0a2d90148bd2e7f32e1e694399db2dbe087 Mon Sep 17 00:00:00 2001
+From: Miklos Szeredi <mszeredi@suse.cz>
+Date: Tue, 14 Aug 2012 11:18:07 +0200
+Subject: [PATCH] Fix "fuse internal error: node NNN not found"
+Bug-Ubuntu: https://launchpad.net/bugs/1019806
+
+Commit 4dc7e675bb (Don't unhash name in FORGET) broke the forget logic in a
+subtle way, resulting in "fuse internal error: node NNN not found" and causing
+the filesystem daemon to abort.
+
+Fix by incrementing the node refcount if nlookup goes from zero to one.
+
+Reported by Kyle Lippincott
+---
+ ChangeLog  |    8 ++++++++
+ lib/fuse.c |   16 ++++++++++++----
+ 2 files changed, 20 insertions(+), 4 deletions(-)
+
+diff --git a/lib/fuse.c b/lib/fuse.c
+index 3c7f642..f801f84 100644
+--- a/lib/fuse.c
++++ b/lib/fuse.c
+@@ -816,6 +816,13 @@ static struct node *lookup_node(struct fuse *f, fuse_ino_t parent,
+ 	return NULL;
+ }
+ 
++static void inc_nlookup(struct node *node)
++{
++	if (!node->nlookup)
++		node->refctr++;
++	node->nlookup++;
++}
++
+ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
+ 			      const char *name)
+ {
+@@ -831,15 +838,16 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
+ 		if (node == NULL)
+ 			goto out_err;
+ 
+-		if (f->conf.remember)
+-			node->nlookup = 1;
+-		node->refctr = 1;
++		node->refctr = 0;
+ 		node->nodeid = next_id(f);
+ 		node->generation = f->generation;
+ 		node->open_count = 0;
+ 		node->is_hidden = 0;
+ 		node->treelock = 0;
+ 		node->ticket = 0;
++		if (f->conf.remember)
++			inc_nlookup(node);
++
+ 		if (hash_name(f, node, parent, name) == -1) {
+ 			free_node(f, node);
+ 			node = NULL;
+@@ -853,7 +861,7 @@ static struct node *find_node(struct fuse *f, fuse_ino_t parent,
+ 	} else if (lru_enabled(f) && node->nlookup == 1) {
+ 		remove_node_lru(node);
+ 	}
+-	node->nlookup ++;
++	inc_nlookup(node);
+ out_err:
+ 	pthread_mutex_unlock(&f->lock);
+ 	return node;
+-- 
+1.7.4.1
+
