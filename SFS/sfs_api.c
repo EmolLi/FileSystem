@@ -78,7 +78,9 @@ typedef struct open_file_table{
 
 
 //====================global (cached) variable==================
-
+unsigned char free_bit_map[FREE_BIT_MAP_SIZE];	//1 for allocated, 0 for unallocated
+inode inode_tableC[INODE_TABLE_LENGTH];
+dir* dirC;
 
 //=====================helper methods============================
 
@@ -86,7 +88,7 @@ typedef struct open_file_table{
 //FIXME: there may be garbage. BUT this may destroy data.
 
 //initialize free_bit_map
-void init_fbm(unsigned char free_bit_map[]){
+void init_fbm(){
 	void* buff = malloc(BLOCK_SIZE*FREE_BIT_MAP_LENGTH);
 	if (read_blocks(FREE_BIT_MAP_INDEX, FREE_BIT_MAP_LENGTH, buff)<0){
 		printf("ERROR in initializing free bit map.\n");
@@ -98,7 +100,7 @@ void init_fbm(unsigned char free_bit_map[]){
 }
 
 //mark block #block_index as allocated in free bit map
-void mark_as_allocated_in_fbm(int block_index, unsigned char free_bit_map[]){
+void mark_as_allocated_in_fbm(int block_index){
 	//FIXME: check if not unallocated
 
 	unsigned char map = free_bit_map[block_index/8];
@@ -110,7 +112,7 @@ void mark_as_allocated_in_fbm(int block_index, unsigned char free_bit_map[]){
 }
 
 //mark block #block_index as unallocated in free bit map
-void mark_as_unallocated_in_fbm(int block_index, unsigned char free_bit_map[]){
+void mark_as_unallocated_in_fbm(int block_index){
 	//FIXME: check if not allocated
 
 	unsigned char map = free_bit_map[block_index/8];
@@ -122,7 +124,7 @@ void mark_as_unallocated_in_fbm(int block_index, unsigned char free_bit_map[]){
 
 //return the free block index
 //if no free block left, return -1
-int find_free_block(unsigned char free_bit_map[]){
+int find_free_block(){
 	int i;
 	int j;
 	for (i = 0; i<FREE_BIT_MAP_SIZE; i++){
@@ -144,41 +146,48 @@ int find_free_block(unsigned char free_bit_map[]){
 
 
 
-void setup_inode_buffer(){
-
-}
 
 
-dir* init_dir(int fresh, inode inode_tableC[], unsigned char free_bit_map[]){
+//=====================DIR=========================
+dir* init_dir(int fresh){
 	dir* dirC = (dir*) malloc(sizeof(dir));
 	//dir_item* dirC = (dir_item*) malloc(sizeof(dir_item)*DIR_SIZE);
 	inode* dir_inode = (inode*) malloc(sizeof(inode));
 
 	//retrieve old data
-	if(fresh != 1){
-		void* buff = malloc(BLOCK_SIZE);
-		if(read_blocks(INODE_TABLE_INDEX, 1, buff) <0){
-			printf("Directory initialization Error.\n");
-			exit(-1);
-		}
-		memcpy(dir_inode, (inode*)buff, sizeof(inode));
-		//FIXME: build dir_item cache table
+	void* buff = malloc(BLOCK_SIZE);
+	if(read_blocks(INODE_TABLE_INDEX, 1, buff) <0){
+		printf("Directory initialization Error.\n");
+		exit(-1);
 	}
+	memcpy(dir_inode, (dir*)buff, sizeof(inode));
+		//FIXME: build dir_item cache table
+
+	(&(inode_tableC[0]))->link_cnt = 1;
+	(&(inode_tableC[0]))->initialized = 1;
+	int datablock = find_free_block();
+	((&(inode_tableC[0]))->direct_ptr)[0] = datablock;
+	mark_as_allocated_in_fbm(datablock);
+
+	return dirC;
 
 
+	return NULL;
+
+/**
 	(&(inode_tableC[0]))->link_cnt = 1;
 	int datablock = find_free_block(free_bit_map);
 	((&(inode_tableC[0]))->direct_ptr)[0] = datablock;
 	mark_as_allocated_in_fbm(datablock, free_bit_map);
+	//FIXME: write cache into disk
 	return dirC;
+	**/
 }
 
 
 
-
-//==============inode========
 //return empty dir item index, or -1 if no empty dir entity left.
-int find_unallocated_dirItem(dir* dirC){
+int find_unallocated_dirItem(){
 	if (dirC->file_num == DIR_SIZE){
 		printf("Maximum file number: 200. DISK FULL.\n");
 		return -1;
@@ -194,16 +203,51 @@ int find_unallocated_dirItem(dir* dirC){
 }
 
 
+
+
+
+
+//====================inode===========================
+
 //return empty inode item index, or -1 if no empty inode left.
-int find_unallocated_inode();
+int find_unallocated_inode(){
+	int i;
+	for (i = 1; i< INODE_TABLE_LENGTH; i++){
+		if((&inode_tableC[i])->initialized != 1){
+			return i;
+		}
+	}
+	printf("No empty inode. Disk FULL.\n");
+	return -1;
+}
+
+void setup_inode_buffer(){
+
+}
+
+
+//return inode index, -1 if no unallocated inode left
+int create_inode(){
+	int inode_index = find_unallocated_inode(inode_tableC);
+	if (inode_index == -1) return inode_index;
+
+	(&inode_tableC[inode_index])->initialized = 1;
+}
+
+
+
+
+
+
 
 
 //fresh == 1, create new disk
 void mksfs(int fresh){
-
-	unsigned char free_bit_map[FREE_BIT_MAP_SIZE];	//1 for allocated, 0 for unallocated
-	inode inode_tableC[INODE_TABLE_LENGTH];
-
+/**
+	unsigned char* fbm = free_bit_map;	//1 for allocated, 0 for unallocated
+	inode* it = inode_tableC;
+	dir* dc = dirC;
+**/
 	int init_result;
 	printf("==========INITIALIZING DISK==========\n");
 	if (fresh == 1){
@@ -236,7 +280,7 @@ void mksfs(int fresh){
 
 
 	//free bit map
-	init_fbm(free_bit_map);
+	init_fbm();
 
 
 
@@ -262,8 +306,7 @@ void mksfs(int fresh){
 
 
 	//directory
-	dir* dirC = init_dir(fresh, inode_tableC, free_bit_map);
-	int a =find_unallocated_dirItem(dirC);
+	dirC = init_dir(fresh);
 
 
 }
@@ -279,6 +322,7 @@ int sfs_get_file_size(char* path){
 }
 
 int sfs_fopen(char *name){
+
   return 0;
 }
 
