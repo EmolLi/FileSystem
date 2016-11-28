@@ -2,6 +2,8 @@
 #include "disk_emu.h"
 #include <stdio.h>
 #include <math.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define FILENAME "File System"
 #define BLOCK_SIZE 1024
@@ -53,11 +55,6 @@ typedef struct dir_item{
 }dir_item;
 
 
-//FIXME: this may be in cache
-typedef struct dir{
-	dir_item files[DIR_SIZE];
-}dir;
-
 
 //open file table
 typedef	struct open_file_item{
@@ -74,11 +71,12 @@ typedef struct open_file_table{
 
 //====================global (cached) variable==================
 unsigned char free_bit_map[FREE_BIT_MAP_SIZE];	//1 for allocated, 0 for unallocated
-
+inode inode_tableC[INODE_TABLE_LENGTH];
 
 
 //=====================helper methods============================
 
+//================free bit map helper method=====================
 //FIXME: there may be garbage. BUT this may destroy data.
 //initialize free_bit_map
 void initialize_fbp(){
@@ -90,7 +88,7 @@ void initialize_fbp(){
 
 //mark block #block_index as allocated in free bit map
 void mark_as_allocated_in_fbm(int block_index){
-	//check if not unallocated
+	//FIXME: check if not unallocated
 
 	unsigned char map = free_bit_map[block_index/8];
 	unsigned char bit_mask = 128;
@@ -102,7 +100,7 @@ void mark_as_allocated_in_fbm(int block_index){
 
 //mark block #block_index as unallocated in free bit map
 void mark_as_unallocated_in_fbm(int block_index){
-	//check if not allocated
+	//FIXME: check if not allocated
 
 	unsigned char map = free_bit_map[block_index/8];
 	int index = block_index%8;
@@ -133,8 +131,92 @@ int find_free_block(){
 	return -1;
 }
 
-void mksfs(int fresh){
 
+
+void setup_inode_buffer(){
+
+}
+
+
+dir_item* init_dir(int fresh){
+	dir_item* dirC = (dir_item*) malloc(sizeof(dir_item)*DIR_SIZE);
+	inode* dir_inode = (inode*) malloc(sizeof(inode));
+
+	//retrieve old data
+	if(fresh != 1){
+		void* buff = malloc(BLOCK_SIZE);
+		if(read_blocks(INODE_TABLE_INDEX, 1, buff) <0){
+			printf("Directory initialization Error.\n");
+			exit(-1);
+		}
+		memcpy(dir_inode, (inode*)buff, sizeof(inode));
+		//FIXME: build dir_item cache table
+	}
+
+
+	inode_tableC[0]->link_cnt = 1;
+	int datablock = find_free_block();
+	(inode_tableC[0]->direct_ptr)[0] = datablock;
+	mark_as_allocated_in_fbm(datablock);
+	return dirC;
+}
+
+
+//fresh == 1, create new disk
+void mksfs(int fresh){
+	int init_result;
+	printf("==========INITIALIZING DISK==========\n");
+	if (fresh == 1){
+		init_result = init_fresh_disk(FILENAME, BLOCK_SIZE, BLOCK_NUM);
+	}
+	else{
+		init_result = init_disk(FILENAME, BLOCK_SIZE, BLOCK_NUM);
+	}
+
+	if (init_result == -1){
+		printf("==========EXITING============\n");
+		return;
+	}
+
+
+	//================partition=======================
+
+	printf("creating partition...\n");
+
+	//super block
+	super_block* sb = (super_block*) malloc(sizeof(super_block));
+	sb->block_size = BLOCK_SIZE;	//#bytes
+	sb->file_system_size = BLOCK_NUM;	//#blk
+	sb->inode_table_length = INODE_TABLE_LENGTH;
+	//what does magic means??????
+	sb->magic = 1;
+	write_blocks(SUPER_BLOCK_INDEX, SUPER_BLOCK_LENGTH, sb);
+	printf("Super Block: %d block.\n", SUPER_BLOCK_LENGTH);
+
+
+
+
+	//inode table
+	//FIXME: THIS IS NOT ONE INODE PER BLOCK
+	//this inode_table is cached.
+	//the pointer is null if not initialized.
+	read_blocks(INODE_TABLE_INDEX, INODE_TABLE_LENGTH, inode_tableC);
+	/**
+	int i;
+	for (i = 0; i<INODE_TABLE_LENGTH; i++){
+		inode_tableC[i] = NULL;
+	}**/
+	//write block only after we created files
+
+	//FIXME: retrieve data already in block
+	if (fresh != 1){
+		setup_inode_buffer();
+	}
+	printf("Inode Table: %d blocks.\n",INODE_TABLE_LENGTH);
+
+
+	//directory
+	init_dir(fresh);
 }
 
 int sfs_get_next_file_name(char *fname){
