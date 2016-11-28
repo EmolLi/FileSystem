@@ -49,8 +49,8 @@ typedef struct inode{
 
 //directory
 typedef struct dir_item{
-	char file_name[16];
-	char file_extension[3];	//full name:file_name.file_extension
+	char file_name[17];	//one for null terminator
+	char file_extension[4];	//full name:file_name.file_extension
 	int inode_index;
 	int initialized;
 	int visited;
@@ -67,7 +67,7 @@ typedef struct dir{
 //open file table
 typedef	struct open_file_item{
 	//file descriptor = file ID = array index in open file table
-	int inode_index;
+	int inode_index;	//default is 0, (0 is directory inode) == uninitialized
 	int readptr;
 	int writeptr;
 }open_file_item;
@@ -81,6 +81,7 @@ typedef struct open_file_table{
 unsigned char free_bit_map[FREE_BIT_MAP_SIZE];	//1 for allocated, 0 for unallocated
 inode inode_tableC[INODE_TABLE_LENGTH];
 dir* dirC;
+open_file_table* oft;
 
 //=====================helper methods============================
 
@@ -96,6 +97,7 @@ void init_fbm(){
 		exit(-1);
 	}
 	memcpy(free_bit_map, buff, sizeof(unsigned char)*FREE_BIT_MAP_SIZE);
+	free(buff);
 
 }
 
@@ -158,6 +160,7 @@ dir* init_dir(int fresh){
 	void* buff = malloc(BLOCK_SIZE);
 	if(read_blocks(INODE_TABLE_INDEX, 1, buff) <0){
 		printf("Directory initialization Error.\n");
+		free(buff);
 		exit(-1);
 	}
 	memcpy(dir_inode, (dir*)buff, sizeof(inode));
@@ -169,19 +172,10 @@ dir* init_dir(int fresh){
 	((&(inode_tableC[0]))->direct_ptr)[0] = datablock;
 	mark_as_allocated_in_fbm(datablock);
 
+	free(buff);
 	return dirC;
 
-
-	return NULL;
-
-/**
-	(&(inode_tableC[0]))->link_cnt = 1;
-	int datablock = find_free_block(free_bit_map);
-	((&(inode_tableC[0]))->direct_ptr)[0] = datablock;
-	mark_as_allocated_in_fbm(datablock, free_bit_map);
 	//FIXME: write cache into disk
-	return dirC;
-	**/
 }
 
 
@@ -203,8 +197,37 @@ int find_unallocated_dirItem(){
 }
 
 
+//return file ID, if not found -> -1.
+int find_file(char *name){
+	int i;
+	int fileCnt = 0;
+	char* full_name = (char*) malloc(sizeof(char)*20);
 
+	for (i = 0; i<DIR_SIZE; i++){
 
+		if(dirC->file_num <= fileCnt){
+			printf("File %s not found.\n", name);
+			return -1;
+		}
+
+		if ((&(dirC->files[i]))->initialized == 0) continue;
+
+		strcpy(full_name, (&(dirC->files[i]))->file_name);
+		strcat(full_name, ".");
+		strcat(full_name, (&(dirC->files[i]))->file_extension);
+		if (strcmp(full_name, name) == 0){
+			//file found
+			free(full_name);
+			return i;
+		}
+
+		fileCnt++;
+	}
+
+	free(full_name);
+	printf("File %s not found.\n", name);
+	return -1;
+}
 
 
 //====================inode===========================
@@ -227,12 +250,13 @@ void setup_inode_buffer(){
 
 
 //return inode index, -1 if no unallocated inode left
+/**
 int create_inode(){
 	int inode_index = find_unallocated_inode(inode_tableC);
 	if (inode_index == -1) return inode_index;
 
 	(&inode_tableC[inode_index])->initialized = 1;
-}
+}**/
 
 
 
@@ -307,7 +331,15 @@ void mksfs(int fresh){
 
 	//directory
 	dirC = init_dir(fresh);
+	oft = (open_file_table*) malloc(sizeof(open_file_table));
 
+	/**
+	dirC->file_num++;
+	strcpy((&(dirC->files[6]))->file_extension, "ABC");
+	strcpy((&(dirC->files[6]))->file_name, "QWERTYUIOPAS");
+	(&(dirC->files[6]))->initialized = 1;
+	printf("%d", find_file("QWERTYUIOPAS.ABC"));
+**/
 
 }
 
@@ -322,8 +354,10 @@ int sfs_get_file_size(char* path){
 }
 
 int sfs_fopen(char *name){
+	int file_ID = find_file(name);
+	if (file_ID == -1) return -1;
 
-  return 0;
+	return 0;
 }
 
 int sfs_fclose(int fileID){
