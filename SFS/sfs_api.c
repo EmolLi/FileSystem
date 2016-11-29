@@ -589,6 +589,13 @@ int sfs_fclose(int fileID){
 //FIXME: is the loc abs or relative location?
 int sfs_frseek(int fileID, int loc){
 	int inode_index = (&(oft->files[fileID]))->inode_index;
+
+	if (inode_index == 0){
+		//not initialized
+		printf("Invalid fileID.\n");
+		return -1;
+	}
+
 	int size = (&(inode_tableC[inode_index]))->size;
 	if (loc < 0 || loc > size){
 		printf("Invalid location.\nLoc should be bigger than 0 and less than than the size of the file (%d).\n", size);
@@ -600,6 +607,13 @@ int sfs_frseek(int fileID, int loc){
 
 int sfs_fwseek(int fileID, int loc){
 	int inode_index = (&(oft->files[fileID]))->inode_index;
+
+	if (inode_index == 0){
+		//not initialized
+		printf("Invalid fileID.\n");
+		return -1;
+	}
+
 	int size = (&(inode_tableC[inode_index]))->size;
 	if (loc < 0 || loc > size){
 		printf("Invalid location.\nLoc should be bigger than 0 and less than than the size of the file (%d).\n", size);
