@@ -221,11 +221,13 @@ void find_disk_blk_dir(int dir_index, int* start_b, int* end_b){
 	*end_b = end/BLOCK_SIZE;
 }
 
+//FIXME: need test
 void update_disk_dir(int dir_index){
 	int start_b;
 	int end_b;
 	void* buff = malloc(BLOCK_SIZE);
 	void* start_p;
+	int block_index;
 
 	find_disk_blk_dir(dir_index, &start_b, &end_b);
 	if (start_b == end_b){
@@ -234,13 +236,34 @@ void update_disk_dir(int dir_index){
 			//set up buffer to write to disk
 			start_p = dirC + start_b*BLOCK_SIZE;
 			memcpy(buff, start_p, BLOCK_SIZE);
-/**
-			//check if the block is allocated to dir.
-			if(((&(inode_tableC[0]))->blk_cnt <=)
-			write_blocks()**/
+			block_index = ((&(inode_tableC[0]))->direct_ptr)[start_b];
+			write_blocks(DATA_BLOCK_INDEX + block_index, 1, buff);
 		}
-
 	}
+	else{
+		//write two page
+		//write the second page
+		start_p = dirC + end_b*BLOCK_SIZE;
+		memcpy(buff, start_p, BLOCK_SIZE);
+		block_index = ((&(inode_tableC[0]))->direct_ptr)[end_b];
+		write_blocks(DATA_BLOCK_INDEX + block_index, 1, buff);
+
+		//write first page if not the first block
+		if(start_b != 0){	//start_b != 0, write two page
+			start_p = dirC + start_b*BLOCK_SIZE;
+			memcpy(buff, start_p, BLOCK_SIZE);
+			block_index = ((&(inode_tableC[0]))->direct_ptr)[start_b];
+			write_blocks(DATA_BLOCK_INDEX + block_index, 1, buff);
+		}
+	}
+
+	//write meta data
+	memcpy(buff, dirC, BLOCK_SIZE);
+	block_index = ((&(inode_tableC[0]))->direct_ptr)[0];
+	write_blocks(DATA_BLOCK_INDEX + block_index, 1, buff);
+
+	free(buff);
+
 }
 
 //====================inode===========================
@@ -319,6 +342,7 @@ int create_file(char *file_name, char *file_ext){
 	memcpy(buff, &(inode_tableC[inode_index]), sizeof(inode));
 	write_blocks(INODE_TABLE_INDEX + inode_index, 1, buff);
 
+	//no need to update dir inode
 
 	//add dir item
 	dirC->file_num++;
@@ -327,13 +351,9 @@ int create_file(char *file_name, char *file_ext){
 	(&(dirC->files[dir_index]))->visited = 0;
 	strcpy((&(dirC->files[dir_index]))->file_name, file_name);
 	strcpy((&(dirC->files[dir_index]))->file_extension, file_ext);
-	//write to disk;
-	//write dir meta data
-	/**
-	if ()
-	memcpy(buff, dirC, BLOCK_SIZE);
-	write_blocks()**/
-	//memcpy
+
+	//write dir update to disk;
+	update_disk_dir(dir_index);
 
 
 }
