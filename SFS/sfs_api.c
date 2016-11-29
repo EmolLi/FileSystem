@@ -172,9 +172,21 @@ dir* init_dir(int fresh){
 
 	(&(inode_tableC[0]))->link_cnt = 1;
 	(&(inode_tableC[0]))->initialized = 1;
-	int datablock = find_free_block();
-	((&(inode_tableC[0]))->direct_ptr)[0] = datablock;
-	mark_as_allocated_in_fbm(datablock);
+
+	//this is only  for fresh
+	//init disk blk;
+	int blk_cnt = (sizeof(dir) + BLOCK_SIZE -1)/BLOCK_SIZE;
+	int i;
+	for (i = 0; i<blk_cnt; i++){
+		int datablock = find_free_block();
+		if (datablock < 0){
+			printf("Error in initializing dir.\n");
+			exit(-3);
+		}
+		((&(inode_tableC[0]))->direct_ptr)[i] = datablock;
+		mark_as_allocated_in_fbm(datablock);
+		(&(inode_tableC[0]))->blk_cnt += 1;
+	}
 
 	free(buff);
 	return dirC;
@@ -201,8 +213,35 @@ int find_unallocated_dirItem(){
 }
 
 
+//update dir item #dir_index, find the block which needs to be overwritten
+void find_disk_blk_dir(int dir_index, int* start_b, int* end_b){
+	size_t start = sizeof(dir_item)*dir_index + sizeof(int)*2; // two meta data
+	size_t end = start +sizeof(dir_item);
+	*start_b = start/BLOCK_SIZE;
+	*end_b = end/BLOCK_SIZE;
+}
 
+void update_disk_dir(int dir_index){
+	int start_b;
+	int end_b;
+	void* buff = malloc(BLOCK_SIZE);
+	void* start_p;
 
+	find_disk_blk_dir(dir_index, &start_b, &end_b);
+	if (start_b == end_b){
+		//write one page
+		if (start_b != 0){	//if start_b == end_b == meta_b, no need to write anything
+			//set up buffer to write to disk
+			start_p = dirC + start_b*BLOCK_SIZE;
+			memcpy(buff, start_p, BLOCK_SIZE);
+/**
+			//check if the block is allocated to dir.
+			if(((&(inode_tableC[0]))->blk_cnt <=)
+			write_blocks()**/
+		}
+
+	}
+}
 
 //====================inode===========================
 
@@ -274,10 +313,12 @@ int create_file(char *file_name, char *file_ext){
 	(&(inode_tableC[inode_index]))->link_cnt = 1;
 	(&(inode_tableC[inode_index]))->blk_cnt = 0;
 	(&(inode_tableC[inode_index]))->size = 0;
+
 	//write to disk
 	void* buff = malloc(BLOCK_SIZE);
 	memcpy(buff, &(inode_tableC[inode_index]), sizeof(inode));
 	write_blocks(INODE_TABLE_INDEX + inode_index, 1, buff);
+
 
 	//add dir item
 	dirC->file_num++;
@@ -288,9 +329,10 @@ int create_file(char *file_name, char *file_ext){
 	strcpy((&(dirC->files[dir_index]))->file_extension, file_ext);
 	//write to disk;
 	//write dir meta data
+	/**
 	if ()
 	memcpy(buff, dirC, BLOCK_SIZE);
-	write_blocks()
+	write_blocks()**/
 	//memcpy
 
 
@@ -417,6 +459,11 @@ void mksfs(int fresh){
 	printf("size of dir: %lu", sizeof(dir));
 	printf("size of dir item: %lu", sizeof(dir_item));
 	printf("       %lu      %lu       %lu2", sizeof(char)*(MAX_FILE_NAME_LEN+1), sizeof(char)*(MAX_FILE_EXT_LEN+1), sizeof(int));
+
+	int start_b;
+	int end_b;
+	find_disk_blk_dir(100, &start_b, &end_b);
+
 	/**
 	dirC->file_num++;
 	strcpy((&(dirC->files[6]))->file_extension, "ABC");
