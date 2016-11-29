@@ -43,6 +43,7 @@ typedef struct super_block{
 typedef struct inode{
 	int initialized;	//0 for uninitialized, 1 for initialized
 	int link_cnt;
+	int blk_cnt;	//-1 for no block, current block index = blk_cnt
 	int size;	//bytes
 	int direct_ptr[DIRECT_PTR_NUM];	//block index
 	int indirect_ptr;
@@ -61,6 +62,7 @@ typedef struct dir_item{
 //FIXME: this may be in cache
 typedef struct dir{
 	dir_item files[DIR_SIZE];
+	//dir meta data are stored in direct block 0 separately
 	int file_num;
 	int iterator;
 }dir;
@@ -68,7 +70,7 @@ typedef struct dir{
 
 //open file table
 typedef	struct open_file_item{
-	//file descriptor = file ID = array index in open file table
+	//file descriptor = file ID = array index in open file table = dir index
 	int inode_index;	//default is 0, (0 is directory inode) == uninitialized
 	int readptr;
 	int writeptr;
@@ -199,6 +201,31 @@ int find_unallocated_dirItem(){
 }
 
 
+
+
+
+//====================inode===========================
+
+//return empty inode item index, or -1 if no empty inode left.
+int find_unallocated_inode(){
+	int i;
+	for (i = 1; i< INODE_TABLE_LENGTH; i++){
+		if((&inode_tableC[i])->initialized != 1){
+			return i;
+		}
+	}
+	printf("No empty inode. Disk FULL.\n");
+	return -1;
+}
+
+void setup_inode_buffer(){
+
+}
+
+
+
+
+
 //return file ID, if not found -> -1.
 int find_file(char *name){
 	int i;
@@ -232,36 +259,39 @@ int find_file(char *name){
 }
 
 
-//====================inode===========================
+//create new file
+//return dir index.
+int create_file(char *file_name, char *file_ext){
+	int dir_index = find_unallocated_dirItem();
+	//dir full
+	if (dir_index < 0) return -1;
 
-//return empty inode item index, or -1 if no empty inode left.
-int find_unallocated_inode(){
-	int i;
-	for (i = 1; i< INODE_TABLE_LENGTH; i++){
-		if((&inode_tableC[i])->initialized != 1){
-			return i;
-		}
-	}
-	printf("No empty inode. Disk FULL.\n");
-	return -1;
+	int inode_index = find_unallocated_inode();
+	if (inode_index < 0) return -1;	//if dir is not full, this should not be full
+
+	//init inode
+	(&(inode_tableC[inode_index]))->initialized = 1;
+	(&(inode_tableC[inode_index]))->link_cnt = 1;
+	(&(inode_tableC[inode_index]))->blk_cnt = -1;
+	(&(inode_tableC[inode_index]))->size = 0;
+	//write to disk
+	void* buff = malloc(BLOCK_SIZE);
+	memcpy(buff, &(inode_tableC[inode_index]), sizeof(inode));
+	write_blocks(INODE_TABLE_INDEX + inode_index, 1, buff);
+
+	//add dir item
+	dirC->file_num++;
+	(&(dirC->files[dir_index]))->initialized = 1;
+	(&(dirC->files[dir_index]))->inode_index = inode_index;
+	(&(dirC->files[dir_index]))->visited = 0;
+	strcpy((&(dirC->files[dir_index]))->file_name, file_name);
+	strcpy((&(dirC->files[dir_index]))->file_extension, file_ext);
+	//write to disk;
+	//write dir meta data
+	//memcpy
+
+
 }
-
-void setup_inode_buffer(){
-
-}
-
-
-//return inode index, -1 if no unallocated inode left
-/**
-int create_inode(){
-	int inode_index = find_unallocated_inode(inode_tableC);
-	if (inode_index == -1) return inode_index;
-
-	(&inode_tableC[inode_index])->initialized = 1;
-}**/
-
-
-
 
 
 
@@ -277,17 +307,7 @@ int check_file_name(char* name){
 //this also handles file name check
 int split_name(char* name, char* file_name, char* file_ext){
 
-/**
-	char str[] ="- This, a sample string.";
-	  char * pch;
-	  printf ("Splitting string \"%s\" into tokens:\n",str);
-	  pch = strtok (str," ,.-");
-	  while (pch != NULL)
-	  {
-	    printf ("%s\n",pch);
-	    pch = strtok (NULL, " ,.-");
-	  }
-	  return 0;**/
+
 	char* name_buff = (char*) malloc(sizeof(char)*(MAX_FILE_NAME_LEN + MAX_FILE_EXT_LEN + 2));
 	strcpy(name_buff, name);
 	const char dot[2] = ".";
@@ -297,6 +317,7 @@ int split_name(char* name, char* file_name, char* file_ext){
 	strcpy(file_name, token);
 	token = strtok(NULL, dot);
 
+	free(name_buff);
 	//no dot found
 	if (token == NULL){
 		printf("Invalid file name.\n");
@@ -307,6 +328,7 @@ int split_name(char* name, char* file_name, char* file_ext){
 
 	if (strlen(file_ext)>MAX_FILE_EXT_LEN || strlen(file_name)>MAX_FILE_NAME_LEN){
 		printf("Invalid file name. \nFile name max len is %d, file extension max len is %d.\n", MAX_FILE_NAME_LEN, MAX_FILE_EXT_LEN);
+		return -2;
 	}
 	return 1;
 
@@ -381,12 +403,17 @@ void mksfs(int fresh){
 	dirC = init_dir(fresh);
 	oft = (open_file_table*) malloc(sizeof(open_file_table));
 
+	printf("The file system only support overwriting, no inserting.\n");
 	char filename[17];
 	char fileext[4];
 	char* name = "1234567890123456.123";
 	split_name(name,filename, fileext);
 	printf("%s", filename);
 	printf("        %s",fileext);
+
+	printf("size of dir: %lu", sizeof(dir));
+	printf("size of dir item: %lu", sizeof(dir_item));
+	printf("       %lu      %lu       %lu2", sizeof(char)*(MAX_FILE_NAME_LEN+1), sizeof(char)*(MAX_FILE_EXT_LEN+1), sizeof(int));
 	/**
 	dirC->file_num++;
 	strcpy((&(dirC->files[6]))->file_extension, "ABC");
@@ -410,13 +437,20 @@ int sfs_get_file_size(char* path){
 
 int sfs_fopen(char *name){
 
-	if (check_file_name(name)==-1){
-		printf("Invalid file name.\nMax file name len:16; Max file extension len:3.\n");
+	char file_name[MAX_FILE_NAME_LEN + 1];
+	char file_ext[MAX_FILE_EXT_LEN + 1];
+	if (split_name(name, file_name, file_ext) < 0){
+		//invalid name
 		return -1;
 	}
 
+
 	int file_ID = find_file(name);
-	if (file_ID == -1) return -1;
+
+	//create new file
+	if (file_ID == -1){
+		;
+	}
 
 	//create open file table entity
 	//(&(dirC->files[i]))->initialized
