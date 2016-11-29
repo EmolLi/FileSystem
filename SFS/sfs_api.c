@@ -355,7 +355,18 @@ int create_file(char *file_name, char *file_ext){
 	//write dir update to disk;
 	update_disk_dir(dir_index);
 
+	return dir_index;
+}
 
+
+
+void create_oft_item(int file_ID){
+	int inode_index = (&(dirC->files[file_ID]))->inode_index;
+	int size = (&(inode_tableC[inode_index]))->size;
+
+	(&(oft->files[file_ID]))->inode_index = inode_index;
+	(&(oft->files[file_ID]))->readptr = 0;
+	(&(oft->files[file_ID]))->writeptr = size;
 }
 
 
@@ -382,14 +393,15 @@ int split_name(char* name, char* file_name, char* file_ext){
 	strcpy(file_name, token);
 	token = strtok(NULL, dot);
 
-	free(name_buff);
 	//no dot found
 	if (token == NULL){
 		printf("Invalid file name.\n");
+		free(name_buff);
 		return -1;
 	}
 
 	strcpy(file_ext, token);
+	free(name_buff);
 
 	if (strlen(file_ext)>MAX_FILE_EXT_LEN || strlen(file_name)>MAX_FILE_NAME_LEN){
 		printf("Invalid file name. \nFile name max len is %d, file extension max len is %d.\n", MAX_FILE_NAME_LEN, MAX_FILE_EXT_LEN);
@@ -469,28 +481,8 @@ void mksfs(int fresh){
 	oft = (open_file_table*) malloc(sizeof(open_file_table));
 
 	printf("The file system only support overwriting, no inserting.\n");
-	char filename[17];
-	char fileext[4];
-	char* name = "1234567890123456.123";
-	split_name(name,filename, fileext);
-	printf("%s", filename);
-	printf("        %s",fileext);
 
-	printf("size of dir: %lu", sizeof(dir));
-	printf("size of dir item: %lu", sizeof(dir_item));
-	printf("       %lu      %lu       %lu2", sizeof(char)*(MAX_FILE_NAME_LEN+1), sizeof(char)*(MAX_FILE_EXT_LEN+1), sizeof(int));
-
-	int start_b;
-	int end_b;
-	find_disk_blk_dir(100, &start_b, &end_b);
-
-	/**
-	dirC->file_num++;
-	strcpy((&(dirC->files[6]))->file_extension, "ABC");
-	strcpy((&(dirC->files[6]))->file_name, "QWERTYUIOPAS");
-	(&(dirC->files[6]))->initialized = 1;
-	printf("%d", find_file("QWERTYUIOPAS.ABC"));
-**/
+	sfs_fopen("asd.ds");
 
 }
 
@@ -514,16 +506,18 @@ int sfs_fopen(char *name){
 		return -1;
 	}
 
-
 	int file_ID = find_file(name);
 
 	//create new file
 	if (file_ID == -1){
-		;
+		file_ID = create_file(file_name, file_ext);	//this creates file inode, updates dir
+		if (file_ID < 0){
+			printf("Error in opening file %s.", name);
+		}
 	}
 
 	//create open file table entity
-	//(&(dirC->files[i]))->initialized
+	create_oft_item(file_ID);
 	return 0;
 }
 
