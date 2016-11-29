@@ -86,6 +86,12 @@ inode inode_tableC[INODE_TABLE_LENGTH];
 dir* dirC;
 open_file_table* oft;
 
+
+//methods definition
+int sfs_fwseek(int fileID, int loc);
+
+
+
 //=====================helper methods============================
 
 //================free bit map helper method=====================
@@ -482,14 +488,9 @@ void mksfs(int fresh){
 
 	printf("The file system only support overwriting, no inserting.\n");
 
-	sfs_fopen("asd.ds");
+	int a = sfs_fopen("asd.ds");
 
-	char *fname = (char*) malloc(21);
-	sfs_get_next_file_name(fname);
-	sfs_get_next_file_name(fname);
-	sfs_get_next_file_name(fname);
-	sfs_get_next_file_name(fname);
-
+	sfs_fwseek(a, 1);
 }
 
 
@@ -569,12 +570,27 @@ int sfs_fclose(int fileID){
   return 0;
 }
 
+//FIXME: is the loc abs or relative location?
 int sfs_frseek(int fileID, int loc){
-  return 0;
+	int inode_index = (&(oft->files[fileID]))->inode_index;
+	int size = (&(inode_tableC[inode_index]))->size;
+	if (loc < 0 || loc > size){
+		printf("Invalid location.\nLoc should be bigger than 0 and less than than the size of the file (%d).\n", size);
+		return -1;
+	}
+	(&(oft->files[fileID]))->readptr = loc;
+	return 0;
 }
 
 int sfs_fwseek(int fileID, int loc){
-  return 0;
+	int inode_index = (&(oft->files[fileID]))->inode_index;
+	int size = (&(inode_tableC[inode_index]))->size;
+	if (loc < 0 || loc > size){
+		printf("Invalid location.\nLoc should be bigger than 0 and less than than the size of the file (%d).\n", size);
+		return -1;
+	}
+	(&(oft->files[fileID]))->writeptr= loc;
+	return 0;
 }
 
 int sfs_fwrite(int fileID, char *buf, int length){
