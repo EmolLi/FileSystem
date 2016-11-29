@@ -43,7 +43,7 @@ typedef struct super_block{
 typedef struct inode{
 	int initialized;	//0 for uninitialized, 1 for initialized
 	int link_cnt;
-	int blk_cnt;	//-1 for no block, current block index = blk_cnt
+	int blk_cnt;	//0 for no block, current block index = blk_cnt-1
 	int size;	//bytes
 	int direct_ptr[DIRECT_PTR_NUM];	//block index
 	int indirect_ptr;
@@ -61,10 +61,9 @@ typedef struct dir_item{
 
 //FIXME: this may be in cache
 typedef struct dir{
-	dir_item files[DIR_SIZE];
-	//dir meta data are stored in direct block 0 separately
 	int file_num;
 	int iterator;
+	dir_item files[DIR_SIZE];
 }dir;
 
 
@@ -170,6 +169,7 @@ dir* init_dir(int fresh){
 	memcpy(dir_inode, (dir*)buff, sizeof(inode));
 		//FIXME: build dir_item cache table
 
+
 	(&(inode_tableC[0]))->link_cnt = 1;
 	(&(inode_tableC[0]))->initialized = 1;
 	int datablock = find_free_block();
@@ -272,7 +272,7 @@ int create_file(char *file_name, char *file_ext){
 	//init inode
 	(&(inode_tableC[inode_index]))->initialized = 1;
 	(&(inode_tableC[inode_index]))->link_cnt = 1;
-	(&(inode_tableC[inode_index]))->blk_cnt = -1;
+	(&(inode_tableC[inode_index]))->blk_cnt = 0;
 	(&(inode_tableC[inode_index]))->size = 0;
 	//write to disk
 	void* buff = malloc(BLOCK_SIZE);
@@ -288,6 +288,9 @@ int create_file(char *file_name, char *file_ext){
 	strcpy((&(dirC->files[dir_index]))->file_extension, file_ext);
 	//write to disk;
 	//write dir meta data
+	if ()
+	memcpy(buff, dirC, BLOCK_SIZE);
+	write_blocks()
 	//memcpy
 
 
