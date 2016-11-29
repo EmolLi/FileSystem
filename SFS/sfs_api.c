@@ -490,7 +490,6 @@ void mksfs(int fresh){
 
 	int a = sfs_fopen("asd.ds");
 
-	sfs_fwseek(a, 1);
 }
 
 
