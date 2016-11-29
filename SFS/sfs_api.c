@@ -489,6 +489,8 @@ void mksfs(int fresh){
 	printf("The file system only support overwriting, no inserting.\n");
 
 	int a = sfs_fopen("asd.ds");
+	sfs_fclose(5);
+	sfs_fclose(a);
 
 }
 
@@ -565,7 +567,14 @@ int sfs_fopen(char *name){
 	return 0;
 }
 
+
 int sfs_fclose(int fileID){
+  if ((&(oft->files[fileID]))->inode_index == 0){
+	  printf("File #%d not opened.",fileID);
+	  return -1;
+  }
+  //inode_index 0 is dir, so no file can have index 0 => 0 is uninitialized
+  (&(oft->files[fileID]))->inode_index = 0;
   return 0;
 }
 
