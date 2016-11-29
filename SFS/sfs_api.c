@@ -489,8 +489,9 @@ void mksfs(int fresh){
 	printf("The file system only support overwriting, no inserting.\n");
 
 	int a = sfs_fopen("asd.ds");
-	sfs_fclose(5);
-	sfs_fclose(a);
+	int b = sfs_get_file_size("asd.ds");
+	int c = sfs_get_file_size("asd.ds3");
+
 
 }
 
@@ -537,8 +538,15 @@ int sfs_get_next_file_name(char *fname){
 	return i;
 }
 
+//path is equal to fname
+//FIXME: do i have to open a file before i get its size?
 int sfs_get_file_size(char* path){
-  return 0;
+	int file_ID = find_file(path);
+	if (file_ID < 0) return -1;
+
+	int inode_index = (&(dirC->files[file_ID]))->inode_index;
+	int size = (&(inode_tableC[inode_index]))->size;
+	return size;
 }
 
 
