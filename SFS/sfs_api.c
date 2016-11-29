@@ -20,6 +20,8 @@
 #define OPEN_FILE_TABLE_SIZE 199
 #define MAX_FILE_BLK (DIRECT_PTR_NUM + BLOCK_SIZE/sizeof(int))
 #define FREE_BIT_MAP_SIZE (DATA_BLOCK_LENGTH + 7)/8		//in bytes number
+#define MAX_FILE_NAME_LEN 16
+#define MAX_FILE_EXT_LEN 3
 
 #define SUPER_BLOCK_INDEX 0
 #define INODE_TABLE_INDEX SUPER_BLOCK_LENGTH
@@ -49,8 +51,8 @@ typedef struct inode{
 
 //directory
 typedef struct dir_item{
-	char file_name[17];	//one for null terminator
-	char file_extension[4];	//full name:file_name.file_extension
+	char file_name[MAX_FILE_NAME_LEN + 1];	//one for null terminator
+	char file_extension[MAX_FILE_EXT_LEN + 1];	//full name:file_name.file_extension
 	int inode_index;
 	int initialized;
 	int visited;
@@ -201,7 +203,7 @@ int find_unallocated_dirItem(){
 int find_file(char *name){
 	int i;
 	int fileCnt = 0;
-	char* full_name = (char*) malloc(sizeof(char)*20);
+	char* full_name = (char*) malloc(sizeof(char)*(MAX_FILE_NAME_LEN + MAX_FILE_EXT_LEN + 2));
 
 	for (i = 0; i<DIR_SIZE; i++){
 
@@ -263,7 +265,53 @@ int create_inode(){
 
 
 
+//======================other helper methods=================
+int check_file_name(char* name){
+	if (strlen(name)>20) return -1;
+	//FIXME: check for file name len & ext len
+	return 1;
+}
 
+
+
+//this also handles file name check
+int split_name(char* name, char* file_name, char* file_ext){
+
+/**
+	char str[] ="- This, a sample string.";
+	  char * pch;
+	  printf ("Splitting string \"%s\" into tokens:\n",str);
+	  pch = strtok (str," ,.-");
+	  while (pch != NULL)
+	  {
+	    printf ("%s\n",pch);
+	    pch = strtok (NULL, " ,.-");
+	  }
+	  return 0;**/
+	char* name_buff = (char*) malloc(sizeof(char)*(MAX_FILE_NAME_LEN + MAX_FILE_EXT_LEN + 2));
+	strcpy(name_buff, name);
+	const char dot[2] = ".";
+	char* token;
+	token = strtok (name_buff, dot);
+
+	strcpy(file_name, token);
+	token = strtok(NULL, dot);
+
+	//no dot found
+	if (token == NULL){
+		printf("Invalid file name.\n");
+		return -1;
+	}
+
+	strcpy(file_ext, token);
+
+	if (strlen(file_ext)>MAX_FILE_EXT_LEN || strlen(file_name)>MAX_FILE_NAME_LEN){
+		printf("Invalid file name. \nFile name max len is %d, file extension max len is %d.\n", MAX_FILE_NAME_LEN, MAX_FILE_EXT_LEN);
+	}
+	return 1;
+
+
+}
 
 //fresh == 1, create new disk
 void mksfs(int fresh){
@@ -333,6 +381,12 @@ void mksfs(int fresh){
 	dirC = init_dir(fresh);
 	oft = (open_file_table*) malloc(sizeof(open_file_table));
 
+	char filename[17];
+	char fileext[4];
+	char* name = "1234567890123456.123";
+	split_name(name,filename, fileext);
+	printf("%s", filename);
+	printf("        %s",fileext);
 	/**
 	dirC->file_num++;
 	strcpy((&(dirC->files[6]))->file_extension, "ABC");
@@ -353,10 +407,19 @@ int sfs_get_file_size(char* path){
   return 0;
 }
 
+
 int sfs_fopen(char *name){
+
+	if (check_file_name(name)==-1){
+		printf("Invalid file name.\nMax file name len:16; Max file extension len:3.\n");
+		return -1;
+	}
+
 	int file_ID = find_file(name);
 	if (file_ID == -1) return -1;
 
+	//create open file table entity
+	//(&(dirC->files[i]))->initialized
 	return 0;
 }
 
