@@ -484,12 +484,55 @@ void mksfs(int fresh){
 
 	sfs_fopen("asd.ds");
 
+	char *fname = (char*) malloc(21);
+	sfs_get_next_file_name(fname);
+	sfs_get_next_file_name(fname);
+	sfs_get_next_file_name(fname);
+	sfs_get_next_file_name(fname);
+
 }
 
 
-
+//return file ID;
 int sfs_get_next_file_name(char *fname){
-  return 0;
+	if (dirC->file_num == 0){
+		printf("No file in dir.\n");
+		return -2;
+	}
+	int i;
+	if (dirC->file_num <= dirC->iterator){
+		printf("End of directory!\n");
+		printf("Resetting iterator...\n");
+
+		dirC->iterator = 0;
+		int cnt = 0;
+		for (i = 0; i<DIR_SIZE; i++){
+			if ((&(dirC->files[i]))->visited == 1){
+				(&(dirC->files[i]))->visited = 0;
+				cnt++;
+				if (cnt >= dirC->file_num) break;
+			}
+		}
+		return -1;
+	}
+
+	for (i = 0; i < DIR_SIZE; i++){
+		if ((&(dirC->files[i]))->visited == 1){
+			continue;
+		}
+		break;
+	}
+
+	strcpy(fname, (&(dirC->files[i]))->file_name);
+	strcat(fname, ".");
+	strcat(fname, (&(dirC->files[i]))->file_extension);
+
+
+	(&(dirC->files[i]))->visited = 1;
+	dirC->iterator +=1;
+
+	//no need to write iterator & visited info into disk.
+	return i;
 }
 
 int sfs_get_file_size(char* path){
@@ -510,6 +553,7 @@ int sfs_fopen(char *name){
 
 	//create new file
 	if (file_ID == -1){
+		printf("Creating file %s.\n", name);
 		file_ID = create_file(file_name, file_ext);	//this creates file inode, updates dir
 		if (file_ID < 0){
 			printf("Error in opening file %s.", name);
