@@ -440,11 +440,25 @@ int write_part_blk_from_beginning(char* buff, int blk_index, int length){
 	return 0;
 }
 
-int write_full_blk(int blk_num, char* buff, int blk_index){
-	if (write_blocks(blk_index, blk_num, buff) < 0){
+//if return value is 2, inode and fbm needs to be updated in disk
+int write_full_blk(char* buff, int i_blk_index, int inode_index){
+	inode* finode = &(inode_tableC[inode_index]);
+	int blk_index;
+	int return_val;
+
+	if(finode->blk_cnt <= i_blk_index){
+		blk_index = find_free_blk();
+		finode->direct_ptr[i_blk_index] = blk_index;
+		mark_as_allocated_in_fbm(blk_index);
+		return_val = 2;
+	}
+	else{
+		blk_index = finode->direct_ptr[i_blk_index];
+	}
+	if (write_blocks(blk_index, 1, buff) < 0){
 		return -1;
 	}
-	return 0;
+	return return_val;
 }
 
 int write_part_blk_from_mid(int offset, char* buff, int blk_index, int length){
@@ -685,19 +699,21 @@ int sfs_fwrite(int fileID, char *buf, int length){
 			update_disk_inode(inode_index);
 		}
 		return length;
-	}/**
+	}
 
-	get_blk_index();
-	write_part_blk_from_mid(buf, blk_index);
-	len -= byte_written;
-	blk_cnt = len / 1024;
-	// no need for loop, just write n blk
+	write_part_blk_from_mid(offset, buf, blk_index, BLOCK_SIZE - offset);
+
+	i_blk_index += 1;
+	int rest_len = length;
+	rest_len -= (BLOCK_SIZE - offset);
+	int blk_num = rest_len / BLOCK_SIZE;
+
 	for(int i = 0; i<blk_cnt; i++){
-		write_full_blk(buf, blk_index);
+		write_full_blk(buf, i_blk_index, inode_index);
 	}
 	len -= byte_written;
 	write_part_blk_from_beginning(buf, blk_index);
-**/
+
 	//return byte_written;
 }
 
