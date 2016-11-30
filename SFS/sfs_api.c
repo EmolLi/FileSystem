@@ -794,7 +794,6 @@ int sfs_fread(int fileID, char *buf, int length){
 	int i_blk_index = rp/BLOCK_SIZE;
 	inode* finode = &(inode_tableC[inode_index]);
 
-	int byte_read = 0;
 	int rest = BLOCK_SIZE - length - offset;
 	if (rest>=0){
 		//one block is enough
@@ -805,7 +804,7 @@ int sfs_fread(int fileID, char *buf, int length){
 		read_block(buf, offset, 0, finode, i_blk_index);
 		i_blk_index++;
 		rest = abs(rest);
-		int bufp = length - rest + buf;
+		char* bufp = length - rest + buf;
 		int blk_num = rest/BLOCK_SIZE;
 		rest -= blk_num * BLOCK_SIZE;
 
@@ -825,15 +824,33 @@ int sfs_fread(int fileID, char *buf, int length){
 
 //FIXME: do we have to open the file before we remove it?
 int sfs_remove(char *file){
-	//remove dir entry
+	int file_ID = find_file(file);
 
+	if (file_ID == -1){
+		printf("File %s not found.\n", file);
+		return -1;
+	}
+
+	//remove dir entry
+	(&(dirC->files[file_ID]))->initialized = 0;
 	//if opened, release oft
+	int inode_index = (&(oft->files[file_ID]))->inode_index;
+	(&(oft->files[file_ID]))->inode_index = 0;
 
 	//release inode
+	inode* finode = &(inode_tableC[inode_index]);
+	finode->initialized = 0;
 
 	//release data block
+	int blk_cnt = finode->blk_cnt;
+	int i;
+	int blk_index;
+	for(i = 0; i<blk_cnt; i++){
+		blk_index = finode->direct_ptr[i];
+		mark_as_unallocated_in_fbm(blk_index);
+	}
 
-  return 0;
+	return 0;
 }
 
 
