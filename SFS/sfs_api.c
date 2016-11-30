@@ -59,7 +59,6 @@ typedef struct dir_item{
 	int visited;
 }dir_item;
 
-//FIXME: this may be in cache
 typedef struct dir{
 	int file_num;
 	int iterator;
@@ -208,7 +207,6 @@ dir* init_dir(int fresh){
 	init_dirC();
 	return dirC;
 
-	//FIXME: write cache into disk
 }
 
 int init_dirC(){
@@ -319,7 +317,7 @@ void setup_inode_buffer(){
 	int i;
 	for (i = 0; i < INODE_TABLE_LENGTH; i++){
 		read_blocks(i + INODE_TABLE_INDEX, 1, buf);
-		memcpy(inode_tableC[i], buf, sizeof(inode));
+		memcpy(&(inode_tableC[i]), buf, sizeof(inode));
 	}
 }
 
