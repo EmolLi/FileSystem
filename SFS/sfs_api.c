@@ -18,10 +18,12 @@
 #define DIRECT_PTR_NUM 12
 #define DIR_SIZE 199
 #define OPEN_FILE_TABLE_SIZE 199
+//FIXME: check if the the blk num exceed this limit when allocating new blk
 #define MAX_FILE_BLK (DIRECT_PTR_NUM + BLOCK_SIZE/sizeof(int))
 #define FREE_BIT_MAP_SIZE (DATA_BLOCK_LENGTH + 7)/8		//in bytes number
 #define MAX_FILE_NAME_LEN 16
 #define MAX_FILE_EXT_LEN 3
+#define PTR_PER_BLK_NUM BLOCK_SIZE/sizeof(int)
 
 #define SUPER_BLOCK_INDEX 0
 #define INODE_TABLE_INDEX SUPER_BLOCK_LENGTH
@@ -49,6 +51,9 @@ typedef struct inode{
 	int indirect_ptr;
 } inode;
 
+typedef struct indirect_ptr_blk{
+	int ptr[PTR_PER_BLK_NUM];
+}indirect_ptr_blk;
 
 //directory
 typedef struct dir_item{
@@ -332,7 +337,28 @@ int update_disk_inode(int inode_index){
 	return 0;
 }
 
+//return blk_index in disk (absolute address), -1 if not the blk is not initialized
+int get_blk_index(int i_blk_index, inode* finode){
+	if (finode ->blk_cnt <= i_blk_index){
+		return -1;
+	}
+	if (i_blk_index < DIRECT_PTR_NUM){
+		return finode->direct_ptr[i_blk_index] + DATA_BLOCK_INDEX;
+	}
 
+	//indirect index;
+	int ptr_blk_index = finode->indirect_ptr + DATA_BLOCK_INDEX;
+	void* buf = malloc(BLOCK_SIZE);
+	read_blocks(ptr_blk_index, 1, buf);
+	indirect_ptr_blk* ip_blk = (indirect_ptr_blk*) malloc(sizeof(indirect_ptr_blk));
+	memcpy(ip_blk, buf, sizeof(indirect_ptr_blk));
+	//index in indirect_ptr_blk array
+	int ip_blk_index = i_blk_index - DIRECT_PTR_NUM +1;
+	int blk_index = ip_blk->ptr[ip_blk_index] +DATA_BLOCK_INDEX;
+	free(buf);
+	return blk_index;
+
+}
 
 
 //return file ID, if not found -> -1.
@@ -652,7 +678,6 @@ int sfs_get_next_file_name(char *fname){
 }
 
 //path is equal to fname
-//FIXME: do i have to open a file before i get its size?
 int sfs_get_file_size(char* path){
 	int file_ID = find_file(path);
 	if (file_ID < 0) return -1;
@@ -699,7 +724,6 @@ int sfs_fclose(int fileID){
   return 0;
 }
 
-//FIXME: is the loc abs or relative location?
 int sfs_frseek(int fileID, int loc){
 	int inode_index = (&(oft->files[fileID]))->inode_index;
 
