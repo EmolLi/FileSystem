@@ -360,6 +360,48 @@ int get_blk_index(int i_blk_index, inode* finode){
 
 }
 
+//update inode and fbm after calling this method
+//return absolute blk index in disk
+int add_new_blk(inode* finode){
+	int i_blk_index = finode->blk_cnt;	//new blk in inode array index
+	int blk_index;
+
+	if (i_blk_index >= MAX_FILE_BLK){
+		printf("File maximum size reached.\n");
+		return -1;
+	}
+
+	blk_index = find_free_block();
+	if (blk_index < 0){
+		//no free blk left
+		return -2;
+	}
+
+	//direct ptr
+	if (i_blk_index < DIRECT_PTR_NUM){
+		finode->direct_ptr[i_blk_index] = blk_index;
+	}
+
+	//indirect ptr
+	else{
+		int ptr_blk_index = finode->indirect_ptr + DATA_BLOCK_INDEX;
+		void* buf = malloc(BLOCK_SIZE);
+		read_blocks(ptr_blk_index, 1, buf);
+		indirect_ptr_blk* ip_blk = (indirect_ptr_blk*) malloc(sizeof(indirect_ptr_blk));
+		memcpy(ip_blk, buf, sizeof(indirect_ptr_blk));
+		int ip_blk_index = i_blk_index - DIRECT_PTR_NUM +1;
+		ip_blk->ptr[ip_blk_index] = blk_index;
+		//update ip_blk in disk
+		memcpy(buf, ip_blk, sizeof(indirect_ptr_blk));
+		write_blocks(ptr_blk_index, 1, buf);
+		free(buf);
+	}
+
+	finode->blk_cnt ++;
+	mark_as_allocated_in_fbm(blk_index);
+	return blk_index + DATA_BLOCK_INDEX;
+}
+
 
 //return file ID, if not found -> -1.
 int find_file(char *name){
