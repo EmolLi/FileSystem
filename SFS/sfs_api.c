@@ -498,6 +498,16 @@ int write_part_blk_from_mid(int offset, char* buff, int blk_index, int length){
 }
 
 
+
+int read_block(char* buf, int offset, int rest, inode* finode, int i_blk_index){
+	//FIXME: add indirect pointer
+	int blk_index = finode->direct_ptr[i_blk_index];
+	char* buff = (char*) malloc(BLOCK_SIZE);
+	read_blocks(blk_index + DATA_BLOCK_INDEX, 1, buff);
+	memcpy(buf, buff+offset, BLOCK_SIZE - offset - rest);
+	return 0;
+}
+
 //fresh == 1, create new disk
 void mksfs(int fresh){
 /**
@@ -555,12 +565,14 @@ void mksfs(int fresh){
 
 	int a = sfs_fopen("asd.ds");
 	char* context = malloc(3000);
+	char* hey = malloc(5);
 	strcpy(context,"abc");
 	/**
 	for (int i = 0;i<300; i++){
 		strcat(context,"zxcvbnmasd");
 	}**/
 	sfs_fwrite(a, context, 3);
+	sfs_fread(a, hey, 3);
 
 
 }
@@ -696,6 +708,7 @@ int sfs_fwseek(int fileID, int loc){
 
 int sfs_fwrite(int fileID, char *buf, int length){
 
+	//FIXME: bug when buf is too big.
 	//check in oft for fileID
 	open_file_item* f_oft_item = &(oft->files[fileID]);
 	int inode_index = f_oft_item->inode_index;
@@ -768,7 +781,45 @@ int sfs_fwrite(int fileID, char *buf, int length){
 }
 
 int sfs_fread(int fileID, char *buf, int length){
-  return 0;
+
+	open_file_item* f_oft_item = &(oft->files[fileID]);
+	int inode_index = f_oft_item->inode_index;
+	if (inode_index == 0){
+		printf("File %d not found.\n", fileID);
+		return -1;
+	}
+
+	int rp = f_oft_item->readptr;
+	int offset = rp % BLOCK_SIZE;
+	int i_blk_index = rp/BLOCK_SIZE;
+	inode* finode = &(inode_tableC[inode_index]);
+
+	int byte_read = 0;
+	int rest = BLOCK_SIZE - length - offset;
+	if (rest>=0){
+		//one block is enough
+		read_block(buf, offset, rest, finode, i_blk_index);
+	}
+
+	else{
+		read_block(buf, offset, 0, finode, i_blk_index);
+		i_blk_index++;
+		rest = abs(rest);
+		int bufp = length - rest + buf;
+		int blk_num = rest/BLOCK_SIZE;
+		rest -= blk_num * BLOCK_SIZE;
+
+		int i;
+		for(i = 0; i<blk_num; i++){
+			read_block(bufp + i*BLOCK_SIZE, 0, 0, finode, i_blk_index);
+			i_blk_index++;
+		}
+		if (rest > 0){
+			read_block(bufp + i*BLOCK_SIZE, 0, rest, finode, i_blk_index);
+		}
+	}
+	f_oft_item->readptr += length;
+	return 0;
 }
 
 
