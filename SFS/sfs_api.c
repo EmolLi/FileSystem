@@ -315,8 +315,14 @@ int find_unallocated_inode(){
 }
 
 void setup_inode_buffer(){
-
+	void* buf = malloc(BLOCK_SIZE);
+	int i;
+	for (i = 0; i < INODE_TABLE_LENGTH; i++){
+		read_blocks(i + INODE_TABLE_INDEX, 1, buf);
+		memcpy(inode_tableC[i], buf, sizeof(inode));
+	}
 }
+
 
 int update_disk_inode(int inode_index){
 	void* buf = malloc(BLOCK_SIZE);
