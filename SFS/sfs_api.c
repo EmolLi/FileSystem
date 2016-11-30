@@ -418,6 +418,30 @@ int split_name(char* name, char* file_name, char* file_ext){
 
 }
 
+
+
+
+int write_part_blk_from_beginning(char* buff, int blk_index){
+	return 0;
+}
+
+int write_full_blk(char* buff, int blk_index){
+	return BLOCK_SIZE;
+}
+
+int write_part_blk_from_mid(int offset, char* buff, int blk_index){
+	char* buf = (char*) malloc(BLOCK_SIZE);
+	if (read_blocks(blk_index, 1, buf) < 0){
+		return -1;
+	}
+	memcpy(offset+buf, buff, strlen(buff));
+	if (write_blocks(blk_index, 1, buf) < 0){
+		return -2;
+	}
+	return 0;
+}
+
+
 //fresh == 1, create new disk
 void mksfs(int fresh){
 /**
@@ -488,9 +512,7 @@ void mksfs(int fresh){
 
 	printf("The file system only support overwriting, no inserting.\n");
 
-	int a = sfs_fopen("asd.ds");
-	int b = sfs_get_file_size("asd.ds");
-	int c = sfs_get_file_size("asd.ds3");
+	write_part_blk_from_mid(12, "helloc", 98);
 
 
 }
@@ -623,15 +645,61 @@ int sfs_fwseek(int fileID, int loc){
 	return 0;
 }
 
+
 int sfs_fwrite(int fileID, char *buf, int length){
-  return 0;
+
+	//check in oft for fileID
+	//if not exist return
+	int inode_index = (&(oft->files[fileID]))->inode_index;
+	if (inode_index == 0){
+		printf("File #d not found.\n", fileID);
+		return -1;
+	}
+
+	//offset = wp%blk_size
+	int wp = (&(oft->files[fileID]))->writeptr;
+	int offset = wp % BLOCK_SIZE;
+	int i_blk_index = wp/BLOCK_SIZE;
+
+	//FIXME: only direct ptr used here. Add indirect ptr.
+	int blk_index = ((&(inode_tableC[inode_index]))->direct_ptr)[i_blk_index] + DATA_BLOCK_INDEX;
+	//FIXME: should i use sizeof or strlen here. if sizeof, there will be garbage??
+	int len = strlen(buf);
+
+	if(offset + len <= 1024){
+		write_part_blk_from_mid(offset, buf, blk_index);
+		return len;
+	}/**
+
+	get_blk_index();
+	write_part_blk_from_mid(buf, blk_index);
+	len -= byte_written;
+	blk_cnt = len / 1024;
+	// no need for loop, just write n blk
+	for(int i = 0; i<blk_cnt; i++){
+		write_full_blk(buf, blk_index);
+	}
+	len -= byte_written;
+	write_part_blk_from_beginning(buf, blk_index);
+**/
+	//return byte_written;
 }
 
 int sfs_fread(int fileID, char *buf, int length){
   return 0;
 }
 
+
+//FIXME: do we have to open the file before we remove it?
 int sfs_remove(char *file){
+	//remove dir entry
+
+	//if opened, release oft
+
+	//release inode
+
+	//release data block
+
   return 0;
 }
 
