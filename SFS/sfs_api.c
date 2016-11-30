@@ -89,7 +89,7 @@ open_file_table* oft;
 
 //methods definition
 int sfs_fwseek(int fileID, int loc);
-
+int init_dirC();
 
 
 //=====================helper methods============================
@@ -166,7 +166,9 @@ void update_disk_fbm(){
 
 //=====================DIR=========================
 dir* init_dir(int fresh){
-	dir* dirC = (dir*) malloc(sizeof(dir));
+	dirC = (dir*) malloc(sizeof(dir));
+
+	//===================init dir inode
 	//dir_item* dirC = (dir_item*) malloc(sizeof(dir_item)*DIR_SIZE);
 	inode* dir_inode = (inode*) malloc(sizeof(inode));
 
@@ -181,30 +183,51 @@ dir* init_dir(int fresh){
 		//FIXME: build dir_item cache table
 
 
-	(&(inode_tableC[0]))->link_cnt = 1;
-	(&(inode_tableC[0]))->initialized = 1;
+	if (fresh == 1){
+		(&(inode_tableC[0]))->link_cnt = 1;
+		(&(inode_tableC[0]))->initialized = 1;
 
-	//this is only  for fresh
-	//init disk blk;
-	int blk_cnt = (sizeof(dir) + BLOCK_SIZE -1)/BLOCK_SIZE;
-	int i;
-	for (i = 0; i<blk_cnt; i++){
-		int datablock = find_free_block();
-		if (datablock < 0){
-			printf("Error in initializing dir.\n");
-			exit(-3);
+		//this is only  for fresh
+		//init disk blk;
+		int blk_cnt = (sizeof(dir) + BLOCK_SIZE -1)/BLOCK_SIZE;
+		int i;
+		for (i = 0; i<blk_cnt; i++){
+			int datablock = find_free_block();
+			if (datablock < 0){
+				printf("Error in initializing dir.\n");
+				exit(-3);
+			}
+			((&(inode_tableC[0]))->direct_ptr)[i] = datablock;
+			mark_as_allocated_in_fbm(datablock);
+			(&(inode_tableC[0]))->blk_cnt += 1;
 		}
-		((&(inode_tableC[0]))->direct_ptr)[i] = datablock;
-		mark_as_allocated_in_fbm(datablock);
-		(&(inode_tableC[0]))->blk_cnt += 1;
 	}
 
 	free(buff);
+
+	init_dirC();
 	return dirC;
 
 	//FIXME: write cache into disk
 }
 
+int init_dirC(){
+	inode* dir_inode = &(inode_tableC[0]);
+	int blk_cnt = dir_inode->blk_cnt;
+	int rest = sizeof(dir) - (blk_cnt-1)*BLOCK_SIZE;
+	int i;
+	int blk_index;
+	for (i = 0; i< blk_cnt-1; i++){
+		blk_index = dir_inode->direct_ptr[i] + DATA_BLOCK_INDEX;
+		read_blocks(blk_index, 1, dirC + i*BLOCK_SIZE);
+	}
+	blk_index = dir_inode->direct_ptr[i] + DATA_BLOCK_INDEX;
+	void* buf = malloc(BLOCK_SIZE);
+	read_blocks(blk_index, 1, buf);
+	memcpy(dirC + i*BLOCK_SIZE, buf, rest);
+	free(buf);
+	return 0;
+}
 
 
 //return empty dir item index, or -1 if no empty dir entity left.
