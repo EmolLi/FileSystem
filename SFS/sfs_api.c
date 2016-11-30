@@ -26,7 +26,7 @@
 #define SUPER_BLOCK_INDEX 0
 #define INODE_TABLE_INDEX SUPER_BLOCK_LENGTH
 #define DATA_BLOCK_INDEX (INODE_TABLE_INDEX + INODE_TABLE_LENGTH)
-#define FREE_BIT_MAP_INDEX (DATA_BLOCK_INDEX + FREE_BIT_MAP_LENGTH)
+#define FREE_BIT_MAP_INDEX (DATA_BLOCK_INDEX + DATA_BLOCK_LENGTH)
 
 
 
@@ -156,7 +156,12 @@ int find_free_block(){
 }
 
 
-
+void update_disk_fbm(){
+	void* buf = malloc(BLOCK_SIZE);
+	memcpy(buf, free_bit_map, sizeof(free_bit_map));
+	write_blocks(FREE_BIT_MAP_INDEX, 1, buf);
+	free(buf);
+}
 
 
 //=====================DIR=========================
@@ -292,7 +297,7 @@ void setup_inode_buffer(){
 
 int update_disk_inode(int inode_index){
 	void* buf = malloc(BLOCK_SIZE);
-	memcpy(buf, inode_tableC[inode_index], sizeof(inode));
+	memcpy(buf, &(inode_tableC[inode_index]), sizeof(inode));
 	if (write_blocks(INODE_TABLE_INDEX + inode_index, 1, buf)<0){
 		return -1;
 	}
@@ -428,16 +433,31 @@ int split_name(char* name, char* file_name, char* file_ext){
 
 
 
+int write_part_blk_from_beginning(char* buff, int i_blk_index, int inode_index, int length){
+	inode* finode = &(inode_tableC[inode_index]);
+	int blk_index;
+	int return_val;
 
-int write_part_blk_from_beginning(char* buff, int blk_index, int length){
+	if(finode->blk_cnt <= i_blk_index){
+		blk_index = find_free_block();
+		finode->direct_ptr[i_blk_index] = blk_index;
+		finode->blk_cnt ++;
+		mark_as_allocated_in_fbm(blk_index);
+		return_val = 2;
+	}
+
+	else{
+			blk_index = finode->direct_ptr[i_blk_index];
+	}
+
 	char* buf = (char*) malloc(BLOCK_SIZE);
 	memcpy(buf, buff, length);
-	if (write_blocks(blk_index, 1, buf) < 0){
+	if (write_blocks(blk_index + DATA_BLOCK_INDEX, 1, buf) < 0){
 			free(buf);
 			return -1;
 		}
 	free(buf);
-	return 0;
+	return return_val;
 }
 
 //if return value is 2, inode and fbm needs to be updated in disk
@@ -447,15 +467,16 @@ int write_full_blk(char* buff, int i_blk_index, int inode_index){
 	int return_val;
 
 	if(finode->blk_cnt <= i_blk_index){
-		blk_index = find_free_blk();
+		blk_index = find_free_block();
 		finode->direct_ptr[i_blk_index] = blk_index;
+		finode->blk_cnt ++;
 		mark_as_allocated_in_fbm(blk_index);
 		return_val = 2;
 	}
 	else{
 		blk_index = finode->direct_ptr[i_blk_index];
 	}
-	if (write_blocks(blk_index, 1, buff) < 0){
+	if (write_blocks(blk_index + DATA_BLOCK_INDEX, 1, buff) < 0){
 		return -1;
 	}
 	return return_val;
@@ -532,7 +553,14 @@ void mksfs(int fresh){
 
 	printf("The file system only support overwriting, no inserting.\n");
 
-	write_part_blk_from_mid(12, "helloc", 98);
+	int a = sfs_fopen("asd.ds");
+	char* context = malloc(3000);
+	strcpy(context,"abc");
+	/**
+	for (int i = 0;i<300; i++){
+		strcat(context,"zxcvbnmasd");
+	}**/
+	sfs_fwrite(a, context, 3);
 
 
 }
@@ -668,11 +696,6 @@ int sfs_fwseek(int fileID, int loc){
 
 int sfs_fwrite(int fileID, char *buf, int length){
 
-	int bufsize = sizeof(buf);
-	if (sizeof(buf) < length){
-		printf("Invalid input! length should be smaller than the size of buf.\n");
-		return -3;
-	}
 	//check in oft for fileID
 	open_file_item* f_oft_item = &(oft->files[fileID]);
 	int inode_index = f_oft_item->inode_index;
@@ -689,17 +712,28 @@ int sfs_fwrite(int fileID, char *buf, int length){
 
 	//FIXME: only direct ptr used here. Add indirect ptr.
 	int blk_index = (finode->direct_ptr)[i_blk_index] + DATA_BLOCK_INDEX;
+	int update = 0;
 
 	if(offset + length <= 1024){
-		write_part_blk_from_mid(offset, buf, blk_index, length);
+		if (offset == 0){
+			if (write_part_blk_from_beginning(buf, i_blk_index, inode_index, length) == 2){
+				update++;
+			}
+		}
+		else {
+			write_part_blk_from_mid(offset, buf, blk_index, length);
+		}
 		//change file size;
 		f_oft_item->writeptr += length;
-		if (finode->size < f_oft_item->writeptr){
-			finode->size = f_oft_item->writeptr;
-			update_disk_inode(inode_index);
+		if (finode->size >= f_oft_item->writeptr){
+			return length;
 		}
+		finode->size = f_oft_item->writeptr;
+		update_disk_inode(inode_index);
+		if (update > 0) update_disk_fbm();
 		return length;
 	}
+
 
 	write_part_blk_from_mid(offset, buf, blk_index, BLOCK_SIZE - offset);
 
@@ -707,14 +741,30 @@ int sfs_fwrite(int fileID, char *buf, int length){
 	int rest_len = length;
 	rest_len -= (BLOCK_SIZE - offset);
 	int blk_num = rest_len / BLOCK_SIZE;
-
-	for(int i = 0; i<blk_cnt; i++){
-		write_full_blk(buf, i_blk_index, inode_index);
+	char* bufp = buf + BLOCK_SIZE - offset;
+	for(int i = 0; i<blk_num; i++){
+		if (write_full_blk(bufp + i*BLOCK_SIZE, i_blk_index, inode_index)==2){
+			update++;
+			i_blk_index++;
+		}
 	}
-	len -= byte_written;
-	write_part_blk_from_beginning(buf, blk_index);
+	rest_len -= blk_num * BLOCK_SIZE;
+	if (write_part_blk_from_beginning(bufp + blk_num*BLOCK_SIZE, i_blk_index, inode_index, rest_len) == 2){
+		update++;
+	}
 
-	//return byte_written;
+	f_oft_item->writeptr += length;
+	if (finode->size < f_oft_item->writeptr){
+		finode->size = f_oft_item->writeptr;
+		if (update <= 0)update_disk_inode(inode_index);
+	}
+
+	if(update > 0){
+		update_disk_inode(inode_index);
+		update_disk_fbm();
+	}
+
+	return length;
 }
 
 int sfs_fread(int fileID, char *buf, int length){
