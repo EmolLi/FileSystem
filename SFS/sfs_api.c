@@ -215,14 +215,15 @@ int init_dirC(){
 	int rest = sizeof(dir) - (blk_cnt-1)*BLOCK_SIZE;
 	int i;
 	int blk_index;
+	void* buf = malloc(BLOCK_SIZE);
 	for (i = 0; i< blk_cnt-1; i++){
 		blk_index = dir_inode->direct_ptr[i] + DATA_BLOCK_INDEX;
-		read_blocks(blk_index, 1, dirC + i*BLOCK_SIZE);
+		read_blocks(blk_index, 1, buf);
+		memcpy((void*)dirC + i*BLOCK_SIZE, buf, BLOCK_SIZE);
 	}
 	blk_index = dir_inode->direct_ptr[i] + DATA_BLOCK_INDEX;
-	void* buf = malloc(BLOCK_SIZE);
 	read_blocks(blk_index, 1, buf);
-	memcpy(dirC + i*BLOCK_SIZE, buf, rest);
+	memcpy((void*)dirC + i*BLOCK_SIZE, buf, rest);
 	free(buf);
 	return 0;
 }
@@ -590,16 +591,19 @@ void mksfs(int fresh){
 
 	printf("The file system only support overwriting, no inserting.\n");
 
+
+
 	int a = sfs_fopen("asd.ds");
 	char* context = malloc(3000);
 	char* hey = malloc(5);
 	strcpy(context,"abc");
-	/**
+
 	for (int i = 0;i<300; i++){
 		strcat(context,"zxcvbnmasd");
-	}**/
-	sfs_fwrite(a, context, 3);
-	sfs_fread(a, hey, 3);
+	}
+	sfs_fwrite(a, context, 100);
+
+	sfs_fread(a, hey, 10);
 
 
 }
