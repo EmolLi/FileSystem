@@ -290,6 +290,14 @@ void setup_inode_buffer(){
 
 }
 
+int update_disk_inode(int inode_index){
+	void* buf = malloc(BLOCK_SIZE);
+	memcpy(buf, inode_tableC[inode_index], sizeof(inode));
+	if (write_blocks(INODE_TABLE_INDEX + inode_index, 1, buf)<0){
+		return -1;
+	}
+	return 0;
+}
 
 
 
@@ -421,23 +429,36 @@ int split_name(char* name, char* file_name, char* file_ext){
 
 
 
-int write_part_blk_from_beginning(char* buff, int blk_index){
+int write_part_blk_from_beginning(char* buff, int blk_index, int length){
+	char* buf = (char*) malloc(BLOCK_SIZE);
+	memcpy(buf, buff, length);
+	if (write_blocks(blk_index, 1, buf) < 0){
+			free(buf);
+			return -1;
+		}
+	free(buf);
 	return 0;
 }
 
-int write_full_blk(char* buff, int blk_index){
-	return BLOCK_SIZE;
-}
-
-int write_part_blk_from_mid(int offset, char* buff, int blk_index){
-	char* buf = (char*) malloc(BLOCK_SIZE);
-	if (read_blocks(blk_index, 1, buf) < 0){
+int write_full_blk(int blk_num, char* buff, int blk_index){
+	if (write_blocks(blk_index, blk_num, buff) < 0){
 		return -1;
 	}
-	memcpy(offset+buf, buff, strlen(buff));
+	return 0;
+}
+
+int write_part_blk_from_mid(int offset, char* buff, int blk_index, int length){
+	char* buf = (char*) malloc(BLOCK_SIZE);
+	if (read_blocks(blk_index, 1, buf) < 0){
+		free(buf);
+		return -1;
+	}
+	memcpy(offset+buf, buff, length);
 	if (write_blocks(blk_index, 1, buf) < 0){
+		free(buf);
 		return -2;
 	}
+	free(buf);
 	return 0;
 }
 
@@ -483,21 +504,6 @@ void mksfs(int fresh){
 	//free bit map
 	init_fbm();
 
-
-
-
-
-	//inode table
-	//FIXME: THIS IS NOT ONE INODE PER BLOCK
-	//this inode_table is cached.
-	//the pointer is null if not initialized.
-//	read_blocks(INODE_TABLE_INDEX, INODE_TABLE_LENGTH, inode_tableC);
-	/**
-	int i;
-	for (i = 0; i<INODE_TABLE_LENGTH; i++){
-		inode_tableC[i] = NULL;
-	}**/
-	//write block only after we created files
 
 	//FIXME: retrieve data already in block
 	if (fresh != 1){
@@ -648,27 +654,37 @@ int sfs_fwseek(int fileID, int loc){
 
 int sfs_fwrite(int fileID, char *buf, int length){
 
+	int bufsize = sizeof(buf);
+	if (sizeof(buf) < length){
+		printf("Invalid input! length should be smaller than the size of buf.\n");
+		return -3;
+	}
 	//check in oft for fileID
-	//if not exist return
-	int inode_index = (&(oft->files[fileID]))->inode_index;
+	open_file_item* f_oft_item = &(oft->files[fileID]);
+	int inode_index = f_oft_item->inode_index;
 	if (inode_index == 0){
-		printf("File #d not found.\n", fileID);
+		printf("File %d not found.\n", fileID);
 		return -1;
 	}
 
 	//offset = wp%blk_size
-	int wp = (&(oft->files[fileID]))->writeptr;
+	int wp = f_oft_item->writeptr;
 	int offset = wp % BLOCK_SIZE;
 	int i_blk_index = wp/BLOCK_SIZE;
+	inode* finode = &(inode_tableC[inode_index]);
 
 	//FIXME: only direct ptr used here. Add indirect ptr.
-	int blk_index = ((&(inode_tableC[inode_index]))->direct_ptr)[i_blk_index] + DATA_BLOCK_INDEX;
-	//FIXME: should i use sizeof or strlen here. if sizeof, there will be garbage??
-	int len = strlen(buf);
+	int blk_index = (finode->direct_ptr)[i_blk_index] + DATA_BLOCK_INDEX;
 
-	if(offset + len <= 1024){
-		write_part_blk_from_mid(offset, buf, blk_index);
-		return len;
+	if(offset + length <= 1024){
+		write_part_blk_from_mid(offset, buf, blk_index, length);
+		//change file size;
+		f_oft_item->writeptr += length;
+		if (finode->size < f_oft_item->writeptr){
+			finode->size = f_oft_item->writeptr;
+			update_disk_inode(inode_index);
+		}
+		return length;
 	}/**
 
 	get_blk_index();
