@@ -18,7 +18,6 @@
 #define DIRECT_PTR_NUM 12
 #define DIR_SIZE 199
 #define OPEN_FILE_TABLE_SIZE 199
-//FIXME: check if the the blk num exceed this limit when allocating new blk
 #define MAX_FILE_BLK (DIRECT_PTR_NUM + BLOCK_SIZE/sizeof(int))
 #define FREE_BIT_MAP_SIZE (DATA_BLOCK_LENGTH + 7)/8		//in bytes number
 #define MAX_FILE_NAME_LEN 16
@@ -100,7 +99,6 @@ int update_disk_inode(int inode_index);
 //=====================helper methods============================
 
 //================free bit map helper method=====================
-//FIXME: there may be garbage. BUT this may destroy data.
 
 //initialize free_bit_map
 void init_fbm(){
@@ -117,8 +115,6 @@ void init_fbm(){
 
 //mark block #block_index as allocated in free bit map
 void mark_as_allocated_in_fbm(int block_index){
-	//FIXME: check if not unallocated
-
 	unsigned char map = free_bit_map[block_index/8];
 	unsigned char bit_mask = 128;
 	int index = block_index%8;
@@ -129,8 +125,6 @@ void mark_as_allocated_in_fbm(int block_index){
 
 //mark block #block_index as unallocated in free bit map
 void mark_as_unallocated_in_fbm(int block_index){
-	//FIXME: check if not allocated
-
 	unsigned char map = free_bit_map[block_index/8];
 	int index = block_index%8;
 	unsigned char bit_mask = 256 -1 - (int)pow(2.0, 7.0-index);
@@ -186,7 +180,6 @@ void init_dir(int fresh){
 		exit(-1);
 	}
 	memcpy(dir_inode, (dir*)buff, sizeof(inode));
-		//FIXME: build dir_item cache table
 
 
 	if (fresh == 1){
@@ -257,7 +250,7 @@ void find_disk_blk_dir(int dir_index, int* start_b, int* end_b){
 	*end_b = end/BLOCK_SIZE;
 }
 
-//FIXME: need test
+
 void update_disk_dir(int dir_index){
 	int start_b;
 	int end_b;
@@ -335,7 +328,7 @@ int update_disk_inode(int inode_index){
 	return 0;
 }
 
-//FIXME: replace stupid code with the two methods
+
 //return blk_index in disk (absolute address), -1 if not the blk is not initialized
 int get_blk_index(int i_blk_index, inode* finode){
 	if (finode ->blk_cnt <= i_blk_index){
@@ -486,13 +479,6 @@ void create_oft_item(int file_ID){
 
 
 //======================other helper methods=================
-int check_file_name(char* name){
-	if (strlen(name)>20) return -1;
-	//FIXME: check for file name len & ext len
-	return 1;
-}
-
-
 
 //this also handles file name check
 int split_name(char* name, char* file_name, char* file_ext){
@@ -589,10 +575,12 @@ int write_part_blk_from_mid(int offset, char* buff, int blk_index, int length){
 
 
 int read_block(char* buf, int offset, int rest, inode* finode, int i_blk_index){
-	//FIXME: add indirect pointer
-	int blk_index = finode->direct_ptr[i_blk_index];
+	int blk_index = get_blk_index(i_blk_index, finode);
+	if (blk_index < 0){
+		printf("Error in reading block.\n");
+	}
 	char* buff = (char*) malloc(BLOCK_SIZE);
-	read_blocks(blk_index + DATA_BLOCK_INDEX, 1, buff);
+	read_blocks(blk_index, 1, buff);
 	memcpy(buf, buff+offset, BLOCK_SIZE - offset - rest);
 	return 0;
 }
@@ -639,7 +627,6 @@ void mksfs(int fresh){
 	init_fbm();
 
 
-	//FIXME: retrieve data already in block
 	if (fresh != 1){
 		setup_inode_buffer();
 	}
@@ -798,7 +785,6 @@ int sfs_fwseek(int fileID, int loc){
 
 int sfs_fwrite(int fileID, char *buf, int length){
 
-	//FIXME: bug when buf is too big.
 	//check in oft for fileID
 	open_file_item* f_oft_item = &(oft->files[fileID]);
 	int inode_index = f_oft_item->inode_index;
@@ -911,7 +897,6 @@ int sfs_fread(int fileID, char *buf, int length){
 }
 
 
-//FIXME: do we have to open the file before we remove it?
 int sfs_remove(char *file){
 	int file_ID = find_file(file);
 
