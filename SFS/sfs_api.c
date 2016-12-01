@@ -101,6 +101,14 @@ int add_new_blk(inode* finode);
 //=====================helper methods============================
 
 //================free bit map helper method=====================
+void init_oft(){
+	oft = (open_file_table*) malloc(sizeof(open_file_table));
+	oft->cnt = 0;
+	int i;
+	for(i = 0; i<OPEN_FILE_TABLE_SIZE; i++){
+		(&(oft->files[i]))->inode_index = 0;
+	}
+}
 
 //initialize free_bit_map
 void init_fbm(){
@@ -232,7 +240,7 @@ int init_dirC(){
 //return empty dir item index, or -1 if no empty dir entity left.
 int find_unallocated_dirItem(){
 	if (dirC->file_num == DIR_SIZE){
-		printf("Maximum file number: 200. DISK FULL.\n");
+		printf("Maximum file number: 199. DISK FULL.\n");
 		return -1;
 	}
 	int i;
@@ -641,7 +649,7 @@ void mksfs(int fresh){
 
 	//directory
 	init_dir(fresh);
-	oft = (open_file_table*) malloc(sizeof(open_file_table));
+	init_oft();
 
 	printf("===============Disk initialized successfully===============\n");
 	printf("The file system only support overwriting, no inserting.\n");
@@ -731,8 +739,9 @@ int sfs_fopen(char *name){
 		}
 	}
 
-	//create open file table entity
-	create_oft_item(file_ID);
+	if ((&(oft->files[file_ID]))->inode_index == 0){
+		create_oft_item(file_ID);
+	}
 	return file_ID;
 }
 
