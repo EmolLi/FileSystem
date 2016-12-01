@@ -346,12 +346,15 @@ int test_read_write_out_of_bound(int *file_id, int *file_sizes, char **file_name
         }
         //Attempt to read far larger than file. Should return error. 
         buf = calloc(file_sizes[i] + ABS_CAP_FILE_SIZE, sizeof(char));
+        //Shift read pointer to 0
+        res = sfs_frseek(file_id[i], 0);
+        if(res < 0)
+          fprintf(stderr, "Warning: sfs_frseek returned positive. Negative seek location attempted. Potential frseek fail?\n");
         res = sfs_fread(file_id[i], buf, file_sizes[i] + ABS_CAP_FILE_SIZE);
-        if(res > 0){
-            fprintf(stderr, "Error: sfs_fread returned positive length. \nThis should be beyond file capacity to read. \nRequested %d to read, Read %d\n", ABS_CAP_FILE_SIZE + file_sizes[i], res);
+        //When i read over the file size, return the maximum read amount
+        if(res != file_sizes[i]){
+            fprintf(stderr, "Error: Length read should be file size\nRequested %d to read, Should be Read: %d, Read %d\n", ABS_CAP_FILE_SIZE + file_sizes[i], file_sizes[i], res);
             *err_no += 1;
-        }else{
-          fprintf(stderr, "Returned error. This is Ok\n");
         }
         free(buf);
     }

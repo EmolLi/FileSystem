@@ -94,6 +94,7 @@ open_file_table* oft;
 int sfs_fwseek(int fileID, int loc);
 int init_dirC();
 int update_disk_inode(int inode_index);
+int add_new_blk(inode* finode);
 
 
 //=====================helper methods============================
@@ -110,6 +111,7 @@ void init_fbm(){
 	}
 	memcpy(free_bit_map, buff, sizeof(unsigned char)*FREE_BIT_MAP_SIZE);
 	free(buff);
+	printf("Free bit map: 1 block.\n");
 
 }
 
@@ -202,6 +204,7 @@ void init_dir(int fresh){
 	}
 
 	free(buff);
+	printf("Initializing directory cache......\n");
 	if (fresh!= 1) init_dirC();
 }
 
@@ -517,7 +520,7 @@ int split_name(char* name, char* file_name, char* file_ext){
 int write_part_blk_from_beginning(char* buff, int i_blk_index, int inode_index, int length){
 	inode* finode = &(inode_tableC[inode_index]);
 	int return_val;
-	int blk_index = get_blk_idnex(i_blk_index, finode);
+	int blk_index = get_blk_index(i_blk_index, finode);
 
 	if(blk_index < 0){
 		blk_index = add_new_blk(finode);
@@ -540,7 +543,7 @@ int write_part_blk_from_beginning(char* buff, int i_blk_index, int inode_index, 
 //if return value is 2, inode and fbm needs to be updated in disk
 int write_full_blk(char* buff, int i_blk_index, int inode_index){
 	inode* finode = &(inode_tableC[inode_index]);
-	int blk_index = get_blk_idnex(i_blk_index, finode);
+	int blk_index = get_blk_index(i_blk_index, finode);
 	int return_val;
 
 	if(blk_index < 0){
@@ -593,7 +596,7 @@ void mksfs(int fresh){
 	dir* dc = dirC;
 **/
 	int init_result;
-	printf("==========INITIALIZING DISK==========\n");
+	printf("===============INITIALIZING DISK===============\n");
 	if (fresh == 1){
 		init_result = init_fresh_disk(FILENAME, BLOCK_SIZE, BLOCK_NUM);
 	}
@@ -637,22 +640,12 @@ void mksfs(int fresh){
 	init_dir(fresh);
 	oft = (open_file_table*) malloc(sizeof(open_file_table));
 
+	printf("===============Disk initialized successfully===============\n");
 	printf("The file system only support overwriting, no inserting.\n");
-
-
-
-	int a = sfs_fopen("asd.ds");
-	char* context = malloc(3000);
-	char* hey = malloc(5);
-	strcpy(context,"abc");
-
-	for (int i = 0;i<300; i++){
-		strcat(context,"zxcvbnmasd");
-	}
-	sfs_fwrite(a, context, 100);
-
-	sfs_fread(a, hey, 10);
-
+	printf("Max file number: %d\n", DIR_SIZE);
+	printf("Block size: %d \n", BLOCK_SIZE);
+	printf("Block number: %d \n", BLOCK_NUM);
+	printf("===========================================================\n\n\n\n");
 
 }
 
