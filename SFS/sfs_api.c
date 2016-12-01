@@ -79,6 +79,7 @@ typedef	struct open_file_item{
 }open_file_item;
 
 typedef struct open_file_table{
+	int cnt;
 	open_file_item files[OPEN_FILE_TABLE_SIZE];
 } open_file_table;
 
@@ -266,7 +267,7 @@ void update_disk_dir(int dir_index){
 		//write one page
 		if (start_b != 0){	//if start_b == end_b == meta_b, no need to write anything
 			//set up buffer to write to disk
-			start_p = dirC + start_b*BLOCK_SIZE;
+			start_p = (void*)dirC + (size_t)start_b*BLOCK_SIZE;
 			memcpy(buff, start_p, BLOCK_SIZE);
 			block_index = ((&(inode_tableC[0]))->direct_ptr)[start_b];
 			write_blocks(DATA_BLOCK_INDEX + block_index, 1, buff);
@@ -274,19 +275,19 @@ void update_disk_dir(int dir_index){
 	}
 	else{
 		//write two page
-		//write the second page
-		start_p = dirC + end_b*BLOCK_SIZE;
-		memcpy(buff, start_p, BLOCK_SIZE);
-		block_index = ((&(inode_tableC[0]))->direct_ptr)[end_b];
-		write_blocks(DATA_BLOCK_INDEX + block_index, 1, buff);
-
-		//write first page if not the first block
-		if(start_b != 0){	//start_b != 0, write two page
-			start_p = dirC + start_b*BLOCK_SIZE;
+		if (start_b != 0){
+			//set up buffer to write to disk
+			start_p = (void*)dirC + (size_t)start_b*BLOCK_SIZE;
 			memcpy(buff, start_p, BLOCK_SIZE);
 			block_index = ((&(inode_tableC[0]))->direct_ptr)[start_b];
 			write_blocks(DATA_BLOCK_INDEX + block_index, 1, buff);
 		}
+
+		//FIXME: for the last page, there may be some garbage (maybe only read a part if it's last page?
+		start_p = (void*)dirC + (size_t)BLOCK_SIZE;
+		memcpy(buff, start_p, BLOCK_SIZE);
+		block_index = ((&(inode_tableC[0]))->direct_ptr)[end_b];
+		write_blocks(DATA_BLOCK_INDEX + block_index, 1, buff);
 	}
 
 	//write meta data
@@ -477,6 +478,8 @@ void create_oft_item(int file_ID){
 	(&(oft->files[file_ID]))->inode_index = inode_index;
 	(&(oft->files[file_ID]))->readptr = 0;
 	(&(oft->files[file_ID]))->writeptr = size;
+
+	oft->cnt +=1;
 }
 
 
@@ -704,6 +707,10 @@ int sfs_get_file_size(char* path){
 
 //return file ID
 int sfs_fopen(char *name){
+	if (oft->cnt >= OPEN_FILE_TABLE_SIZE ){
+		printf("Too many files opened!\n");
+		return -2;
+	}
 
 	char file_name[MAX_FILE_NAME_LEN + 1];
 	char file_ext[MAX_FILE_EXT_LEN + 1];
@@ -720,6 +727,7 @@ int sfs_fopen(char *name){
 		file_ID = create_file(file_name, file_ext);	//this creates file inode, updates dir
 		if (file_ID < 0){
 			printf("Error in opening file %s.", name);
+			return -1;
 		}
 	}
 
@@ -741,6 +749,7 @@ int sfs_fclose(int fileID){
 	}
 	//inode_index 0 is dir, so no file can have index 0 => 0 is uninitialized
 	(&(oft->files[fileID]))->inode_index = 0;
+	oft->cnt--;
 	return 0;
 }
 
@@ -909,7 +918,10 @@ int sfs_remove(char *file){
 
 	//if opened, release oft
 	int inode_index = (&(oft->files[file_ID]))->inode_index;
-	(&(oft->files[file_ID]))->inode_index = 0;
+	if (inode_index != 0){
+		(&(oft->files[file_ID]))->inode_index = 0;
+		oft->cnt --;
+	}
 
 	//release inode
 	inode* finode = &(inode_tableC[inode_index]);
