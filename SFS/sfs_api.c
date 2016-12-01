@@ -532,7 +532,7 @@ int write_part_blk_from_beginning(char* buff, int i_blk_index, int inode_index, 
 
 	char* buf = (char*) malloc(BLOCK_SIZE);
 	memcpy(buf, buff, length);
-	if (write_blocks(blk_index + DATA_BLOCK_INDEX, 1, buf) < 0){
+	if (write_blocks(blk_index, 1, buf) < 0){
 			free(buf);
 			return -1;
 		}
@@ -654,7 +654,7 @@ void mksfs(int fresh){
 int sfs_get_next_file_name(char *fname){
 	if (dirC->file_num == 0){
 		printf("No file in dir.\n");
-		return -2;
+		return 0;
 	}
 	int i;
 	if (dirC->file_num <= dirC->iterator){
@@ -670,7 +670,7 @@ int sfs_get_next_file_name(char *fname){
 				if (cnt >= dirC->file_num) break;
 			}
 		}
-		return -1;
+		return 0;
 	}
 
 	for (i = 0; i < DIR_SIZE; i++){
@@ -702,7 +702,7 @@ int sfs_get_file_size(char* path){
 	return size;
 }
 
-
+//return file ID
 int sfs_fopen(char *name){
 
 	char file_name[MAX_FILE_NAME_LEN + 1];
@@ -725,18 +725,23 @@ int sfs_fopen(char *name){
 
 	//create open file table entity
 	create_oft_item(file_ID);
-	return 0;
+	return file_ID;
 }
 
 
 int sfs_fclose(int fileID){
-  if ((&(oft->files[fileID]))->inode_index == 0){
-	  printf("File #%d not opened.",fileID);
-	  return -1;
-  }
-  //inode_index 0 is dir, so no file can have index 0 => 0 is uninitialized
-  (&(oft->files[fileID]))->inode_index = 0;
-  return 0;
+	if (fileID<0 || fileID>=OPEN_FILE_TABLE_SIZE){
+		printf("Invalid fileID.\n");
+		return -1;
+	}
+
+	if ((&(oft->files[fileID]))->inode_index == 0){
+		printf("File #%d not opened.",fileID);
+		return -1;
+	}
+	//inode_index 0 is dir, so no file can have index 0 => 0 is uninitialized
+	(&(oft->files[fileID]))->inode_index = 0;
+	return 0;
 }
 
 int sfs_frseek(int fileID, int loc){
@@ -886,7 +891,7 @@ int sfs_fread(int fileID, char *buf, int length){
 		}
 	}
 	f_oft_item->readptr += length;
-	return 0;
+	return length;
 }
 
 
@@ -900,6 +905,8 @@ int sfs_remove(char *file){
 
 	//remove dir entry
 	(&(dirC->files[file_ID]))->initialized = 0;
+	dirC->file_num --;
+
 	//if opened, release oft
 	int inode_index = (&(oft->files[file_ID]))->inode_index;
 	(&(oft->files[file_ID]))->inode_index = 0;
