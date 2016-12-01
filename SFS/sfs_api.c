@@ -94,6 +94,7 @@ open_file_table* oft;
 //methods definition
 int sfs_fwseek(int fileID, int loc);
 int init_dirC();
+int update_disk_inode(int inode_index);
 
 
 //=====================helper methods============================
@@ -156,6 +157,7 @@ int find_free_block(){
 			bit_mask = bit_mask>>1;
 		}
 	}
+	printf("Disk full.\n");
 	return -1;
 }
 
@@ -169,7 +171,7 @@ void update_disk_fbm(){
 
 
 //=====================DIR=========================
-dir* init_dir(int fresh){
+void init_dir(int fresh){
 	dirC = (dir*) malloc(sizeof(dir));
 
 	//===================init dir inode
@@ -196,22 +198,18 @@ dir* init_dir(int fresh){
 		int blk_cnt = (sizeof(dir) + BLOCK_SIZE -1)/BLOCK_SIZE;
 		int i;
 		for (i = 0; i<blk_cnt; i++){
-			int datablock = find_free_block();
-			if (datablock < 0){
+			int blk_index = add_new_blk(&(inode_tableC[0])) - DATA_BLOCK_INDEX;
+			if (blk_index < 0){
 				printf("Error in initializing dir.\n");
 				exit(-3);
 			}
-			((&(inode_tableC[0]))->direct_ptr)[i] = datablock;
-			mark_as_allocated_in_fbm(datablock);
-			(&(inode_tableC[0]))->blk_cnt += 1;
 		}
+		update_disk_fbm();
+		update_disk_inode(0);
 	}
 
 	free(buff);
-
-	init_dirC();
-	return dirC;
-
+	if (fresh!= 1) init_dirC();
 }
 
 int init_dirC(){
@@ -337,6 +335,7 @@ int update_disk_inode(int inode_index){
 	return 0;
 }
 
+//FIXME: replace stupid code with the two methods
 //return blk_index in disk (absolute address), -1 if not the blk is not initialized
 int get_blk_index(int i_blk_index, inode* finode){
 	if (finode ->blk_cnt <= i_blk_index){
@@ -531,19 +530,15 @@ int split_name(char* name, char* file_name, char* file_ext){
 
 int write_part_blk_from_beginning(char* buff, int i_blk_index, int inode_index, int length){
 	inode* finode = &(inode_tableC[inode_index]);
-	int blk_index;
 	int return_val;
+	int blk_index = get_blk_idnex(i_blk_index, finode);
 
-	if(finode->blk_cnt <= i_blk_index){
-		blk_index = find_free_block();
-		finode->direct_ptr[i_blk_index] = blk_index;
-		finode->blk_cnt ++;
-		mark_as_allocated_in_fbm(blk_index);
+	if(blk_index < 0){
+		blk_index = add_new_blk(finode);
+		if (blk_index < 0){
+			return -1;
+		}
 		return_val = 2;
-	}
-
-	else{
-			blk_index = finode->direct_ptr[i_blk_index];
 	}
 
 	char* buf = (char*) malloc(BLOCK_SIZE);
@@ -559,19 +554,17 @@ int write_part_blk_from_beginning(char* buff, int i_blk_index, int inode_index, 
 //if return value is 2, inode and fbm needs to be updated in disk
 int write_full_blk(char* buff, int i_blk_index, int inode_index){
 	inode* finode = &(inode_tableC[inode_index]);
-	int blk_index;
+	int blk_index = get_blk_idnex(i_blk_index, finode);
 	int return_val;
 
-	if(finode->blk_cnt <= i_blk_index){
-		blk_index = find_free_block();
-		finode->direct_ptr[i_blk_index] = blk_index;
-		finode->blk_cnt ++;
-		mark_as_allocated_in_fbm(blk_index);
+	if(blk_index < 0){
+		blk_index = add_new_blk(finode);
+		if (blk_index < 0){
+			return -1;
+		}
 		return_val = 2;
 	}
-	else{
-		blk_index = finode->direct_ptr[i_blk_index];
-	}
+
 	if (write_blocks(blk_index + DATA_BLOCK_INDEX, 1, buff) < 0){
 		return -1;
 	}
@@ -654,7 +647,7 @@ void mksfs(int fresh){
 
 
 	//directory
-	dirC = init_dir(fresh);
+	init_dir(fresh);
 	oft = (open_file_table*) malloc(sizeof(open_file_table));
 
 	printf("The file system only support overwriting, no inserting.\n");
@@ -820,8 +813,7 @@ int sfs_fwrite(int fileID, char *buf, int length){
 	int i_blk_index = wp/BLOCK_SIZE;
 	inode* finode = &(inode_tableC[inode_index]);
 
-	//FIXME: only direct ptr used here. Add indirect ptr.
-	int blk_index = (finode->direct_ptr)[i_blk_index] + DATA_BLOCK_INDEX;
+	int blk_index = get_blk_index(i_blk_index, finode);
 	int update = 0;
 
 	if(offset + length <= 1024){
