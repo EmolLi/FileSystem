@@ -932,9 +932,13 @@ int sfs_fread(int fileID, char *buf, int length){
 	int i_blk_index = rp/BLOCK_SIZE;
 	inode* finode = &(inode_tableC[inode_index]);
 
-	if (length < 0 || length + rp > finode->size){
+	if (length < 0){
 		return -1;
 	}
+
+	if (length + rp > finode->size){
+			length = finode->size - rp;
+		}
 
 	int rest = BLOCK_SIZE - length - offset;
 	if (rest>=0){
