@@ -565,7 +565,7 @@ int write_full_blk(char* buff, int i_blk_index, int inode_index){
 		return_val = 2;
 	}
 
-	if (write_blocks(blk_index + DATA_BLOCK_INDEX, 1, buff) < 0){
+	if (write_blocks(blk_index, 1, buff) < 0){
 		return -1;
 	}
 	return return_val;
@@ -818,6 +818,15 @@ int sfs_fwrite(int fileID, char *buf, int length){
 	int blk_index = get_blk_index(i_blk_index, finode);
 	int update = 0;
 
+	if(blk_index < 0){
+		blk_index = add_new_blk(finode);
+		if (blk_index < 0){
+			return -1;
+		}
+		update++;
+	}
+
+
 	if(offset + length <= 1024){
 		if (offset == 0){
 			if (write_part_blk_from_beginning(buf, i_blk_index, inode_index, length) == 2){
@@ -905,7 +914,7 @@ int sfs_fread(int fileID, char *buf, int length){
 			i_blk_index++;
 		}
 		if (rest > 0){
-			read_block(bufp + i*BLOCK_SIZE, 0, rest, finode, i_blk_index);
+			read_block(bufp + i*BLOCK_SIZE, 0, BLOCK_SIZE - rest, finode, i_blk_index);
 		}
 	}
 	f_oft_item->readptr += length;
