@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define FILENAME "File System"
+#define FILENAME "duanLi_FileSys"
 #define BLOCK_SIZE 1024
 #define BLOCK_NUM 2000
 
