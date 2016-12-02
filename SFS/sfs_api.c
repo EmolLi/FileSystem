@@ -848,6 +848,11 @@ int sfs_fwrite(int fileID, char *buf, int length){
 	int i_blk_index = wp/BLOCK_SIZE;
 	inode* finode = &(inode_tableC[inode_index]);
 
+	//check user input length
+	if (length < 0 || length + wp > MAX_FILE_BLK*BLOCK_SIZE){
+		return -1;
+	}
+
 	int blk_index = get_blk_index(i_blk_index, finode);
 	int update = 0;
 
@@ -926,6 +931,10 @@ int sfs_fread(int fileID, char *buf, int length){
 	int offset = rp % BLOCK_SIZE;
 	int i_blk_index = rp/BLOCK_SIZE;
 	inode* finode = &(inode_tableC[inode_index]);
+
+	if (length < 0 || length + rp > finode->size){
+		return -1;
+	}
 
 	int rest = BLOCK_SIZE - length - offset;
 	if (rest>=0){
