@@ -126,6 +126,7 @@ void init_fbm(){
 
 //mark block #block_index as allocated in free bit map
 void mark_as_allocated_in_fbm(int block_index){
+
 	unsigned char map = free_bit_map[block_index/8];
 	unsigned char bit_mask = 128;
 	int index = block_index%8;
@@ -227,11 +228,11 @@ int init_dirC(){
 	for (i = 0; i< blk_cnt-1; i++){
 		blk_index = dir_inode->direct_ptr[i] + DATA_BLOCK_INDEX;
 		read_blocks(blk_index, 1, buf);
-		memcpy((void*)dirC + i*BLOCK_SIZE, buf, BLOCK_SIZE);
+		memcpy((void*)dirC + (size_t)i*BLOCK_SIZE, buf, BLOCK_SIZE);
 	}
 	blk_index = dir_inode->direct_ptr[i] + DATA_BLOCK_INDEX;
 	read_blocks(blk_index, 1, buf);
-	memcpy((void*)dirC + i*BLOCK_SIZE, buf, rest);
+	memcpy((void*)dirC + (size_t)i*BLOCK_SIZE, buf, rest);
 	free(buf);
 	return 0;
 }
@@ -302,6 +303,8 @@ void update_disk_dir(int dir_index){
 	memcpy(buff, dirC, BLOCK_SIZE);
 	block_index = ((&(inode_tableC[0]))->direct_ptr)[0];
 	write_blocks(DATA_BLOCK_INDEX + block_index, 1, buff);
+	//test
+	read_blocks(201,1,buff);
 
 	free(buff);
 
@@ -357,7 +360,7 @@ int get_blk_index(int i_blk_index, inode* finode){
 	indirect_ptr_blk* ip_blk = (indirect_ptr_blk*) malloc(sizeof(indirect_ptr_blk));
 	memcpy(ip_blk, buf, sizeof(indirect_ptr_blk));
 	//index in indirect_ptr_blk array
-	int ip_blk_index = i_blk_index - DIRECT_PTR_NUM +1;
+	int ip_blk_index = i_blk_index - DIRECT_PTR_NUM;
 	int blk_index = ip_blk->ptr[ip_blk_index] +DATA_BLOCK_INDEX;
 	free(buf);
 	return blk_index;
@@ -381,6 +384,8 @@ int add_new_blk(inode* finode){
 		return -2;
 	}
 
+
+	mark_as_allocated_in_fbm(blk_index);
 	//direct ptr
 	if (i_blk_index < DIRECT_PTR_NUM){
 		finode->direct_ptr[i_blk_index] = blk_index;
@@ -389,11 +394,19 @@ int add_new_blk(inode* finode){
 	//indirect ptr
 	else{
 		int ptr_blk_index = finode->indirect_ptr + DATA_BLOCK_INDEX;
+
+		if (ptr_blk_index == DATA_BLOCK_INDEX){
+			ptr_blk_index = find_free_block();
+			finode->indirect_ptr = ptr_blk_index;
+			mark_as_allocated_in_fbm(ptr_blk_index);
+			ptr_blk_index += DATA_BLOCK_INDEX;
+		}
+
 		void* buf = malloc(BLOCK_SIZE);
 		read_blocks(ptr_blk_index, 1, buf);
 		indirect_ptr_blk* ip_blk = (indirect_ptr_blk*) malloc(sizeof(indirect_ptr_blk));
 		memcpy(ip_blk, buf, sizeof(indirect_ptr_blk));
-		int ip_blk_index = i_blk_index - DIRECT_PTR_NUM +1;
+		int ip_blk_index = i_blk_index - DIRECT_PTR_NUM;
 		ip_blk->ptr[ip_blk_index] = blk_index;
 		//update ip_blk in disk
 		memcpy(buf, ip_blk, sizeof(indirect_ptr_blk));
@@ -402,7 +415,6 @@ int add_new_blk(inode* finode){
 	}
 
 	finode->blk_cnt ++;
-	mark_as_allocated_in_fbm(blk_index);
 	return blk_index + DATA_BLOCK_INDEX;
 }
 
@@ -622,7 +634,22 @@ int read_block(char* buf, int offset, int rest, inode* finode, int i_blk_index){
 		printf("Error in reading block.\n");
 	}
 	char* buff = (char*) malloc(BLOCK_SIZE);
+
+	//=====================
+	read_blocks(201,1,buff);
+	//=======================
+
 	read_blocks(blk_index, 1, buff);
+
+
+
+
+	//===================
+	char* test =(char*) malloc(1024);
+	read_blocks(201,1,test);
+	free(test);
+	//===================
+
 	memcpy(buf, buff+offset, BLOCK_SIZE - offset - rest);
 	//=======for test==========
 	char* test_read = (char*) malloc(BLOCK_SIZE);
@@ -689,6 +716,7 @@ void mksfs(int fresh){
 	printf("Max file number: %d\n", DIR_SIZE);
 	printf("Block size: %d \n", BLOCK_SIZE);
 	printf("Block number: %d \n", BLOCK_NUM);
+	printf("Author: Duan Li, 260683698\n");
 	printf("===========================================================\n\n\n\n");
 
 }
@@ -696,6 +724,12 @@ void mksfs(int fresh){
 
 //return file ID;
 int sfs_get_next_file_name(char *fname){
+	//===================
+	char* buff =(char*) malloc(1024);
+	read_blocks(201,1,buff);
+	free(buff);
+	//===================
+
 	if (dirC->file_num == 0){
 		printf("No file in dir.\n");
 		return 0;
@@ -711,6 +745,7 @@ int sfs_get_next_file_name(char *fname){
 			if ((&(dirC->files[i]))->visited == 1){
 				(&(dirC->files[i]))->visited = 0;
 				cnt++;
+				update_disk_dir(i);
 				if (cnt >= dirC->file_num) break;
 			}
 		}
@@ -731,7 +766,7 @@ int sfs_get_next_file_name(char *fname){
 
 	(&(dirC->files[i]))->visited = 1;
 	dirC->iterator +=1;
-
+	update_disk_dir(i);
 	//no need to write iterator & visited info into disk.
 	return i;
 }
@@ -748,6 +783,12 @@ int sfs_get_file_size(char* path){
 
 //return file ID
 int sfs_fopen(char *name){
+	//===================
+	char* buff =(char*) malloc(1024);
+	read_blocks(201,1,buff);
+	free(buff);
+	//===================
+
 	if (oft->cnt >= OPEN_FILE_TABLE_SIZE ){
 		printf("Too many files opened!\n");
 		return -2;
@@ -796,9 +837,20 @@ int sfs_fclose(int fileID){
 }
 
 int sfs_frseek(int fileID, int loc){
+	//===================
+	char* buff =(char*) malloc(1024);
+	read_blocks(201,1,buff);
+	free(buff);
+	//===================
+
+	if(fileID<0 || fileID >= DIR_SIZE){
+		return -1;
+	}
+
+
 	int inode_index = (&(oft->files[fileID]))->inode_index;
 
-	if (inode_index == 0){
+	if (inode_index <= 0 ||inode_index >= INODE_TABLE_LENGTH){
 		//not initialized
 		printf("Invalid fileID.\n");
 		return -1;
@@ -814,9 +866,18 @@ int sfs_frseek(int fileID, int loc){
 }
 
 int sfs_fwseek(int fileID, int loc){
+	//===================
+	char* buff =(char*) malloc(1024);
+	read_blocks(201,1,buff);
+	free(buff);
+	//===================
+	if(fileID<0 || fileID >= DIR_SIZE){
+		return -1;
+	}
+
 	int inode_index = (&(oft->files[fileID]))->inode_index;
 
-	if (inode_index == 0){
+	if (inode_index <= 0 || inode_index >= INODE_TABLE_LENGTH){
 		//not initialized
 		printf("Invalid fileID.\n");
 		return -1;
@@ -833,6 +894,11 @@ int sfs_fwseek(int fileID, int loc){
 
 
 int sfs_fwrite(int fileID, char *buf, int length){
+
+	if(fileID<0 || fileID >= DIR_SIZE){
+		return -1;
+	}
+
 
 	//check in oft for fileID
 	open_file_item* f_oft_item = &(oft->files[fileID]);
@@ -920,6 +986,18 @@ int sfs_fwrite(int fileID, char *buf, int length){
 
 int sfs_fread(int fileID, char *buf, int length){
 
+	//===================
+	char* test =(char*) malloc(1024);
+	read_blocks(201,1,test);
+	free(test);
+	//===================
+
+
+	if(fileID<0 || fileID >= DIR_SIZE){
+		return -1;
+	}
+
+
 	open_file_item* f_oft_item = &(oft->files[fileID]);
 	int inode_index = f_oft_item->inode_index;
 	if (inode_index == 0){
@@ -936,6 +1014,13 @@ int sfs_fread(int fileID, char *buf, int length){
 		return -1;
 	}
 
+	//===================
+	test =(char*) malloc(1024);
+	read_blocks(201,1,test);
+	free(test);
+	//===================
+
+
 	if (length + rp > finode->size){
 			length = finode->size - rp;
 		}
@@ -944,6 +1029,15 @@ int sfs_fread(int fileID, char *buf, int length){
 	if (rest>=0){
 		//one block is enough
 		read_block(buf, offset, rest, finode, i_blk_index);
+
+
+
+		//===================
+		char* test =(char*) malloc(1024);
+		read_blocks(201,1,test);
+		free(test);
+		//===================
+
 	}
 
 	else{
@@ -976,29 +1070,37 @@ int sfs_remove(char *file){
 		return -1;
 	}
 
+	int inode_index = (&(dirC->files[file_ID]))->inode_index;
 	//remove dir entry
 	(&(dirC->files[file_ID]))->initialized = 0;
 	dirC->file_num --;
 
-	//if opened, release oft
-	int inode_index = (&(oft->files[file_ID]))->inode_index;
-	if (inode_index != 0){
-		(&(oft->files[file_ID]))->inode_index = 0;
-		oft->cnt --;
-	}
 
 	//release inode
 	inode* finode = &(inode_tableC[inode_index]);
 	finode->initialized = 0;
+
 
 	//release data block
 	int blk_cnt = finode->blk_cnt;
 	int i;
 	int blk_index;
 	for(i = 0; i<blk_cnt; i++){
-		blk_index = finode->direct_ptr[i];
+		blk_index = get_blk_index(i, finode) - DATA_BLOCK_INDEX;
 		mark_as_unallocated_in_fbm(blk_index);
 	}
+	finode->blk_cnt = 0;
+
+	inode_index = (&(oft->files[file_ID]))->inode_index;
+	//if opened, release oft
+	if (inode_index != 0){
+		(&(oft->files[file_ID]))->inode_index = 0;
+		oft->cnt --;
+	}
+
+	update_disk_inode(inode_index);
+	update_disk_dir(file_ID);
+	update_disk_fbm();
 
 	return 0;
 }
