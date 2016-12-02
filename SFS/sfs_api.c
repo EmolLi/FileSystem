@@ -533,6 +533,14 @@ int write_part_blk_from_beginning(char* buff, int i_blk_index, int inode_index, 
 	int return_val;
 	int blk_index = get_blk_index(i_blk_index, finode);
 
+	char* buf = (char*) malloc(BLOCK_SIZE);
+	if (blk_index > 0){
+		if (read_blocks(blk_index, 1, buf) < 0){
+			free(buf);
+			return -1;
+		}
+	}
+
 	if(blk_index < 0){
 		blk_index = add_new_blk(finode);
 		if (blk_index < 0){
@@ -541,12 +549,11 @@ int write_part_blk_from_beginning(char* buff, int i_blk_index, int inode_index, 
 		return_val = 2;
 	}
 
-	char* buf = (char*) malloc(BLOCK_SIZE);
 	memcpy(buf, buff, length);
 
 	//===========================
 	char* write_test = (char*) malloc(BLOCK_SIZE);
-	memcpy(write_test, buf, length);
+	memcpy(write_test, buf, BLOCK_SIZE);
 	free(write_test);
 	//==============================
 
