@@ -543,6 +543,13 @@ int write_part_blk_from_beginning(char* buff, int i_blk_index, int inode_index, 
 
 	char* buf = (char*) malloc(BLOCK_SIZE);
 	memcpy(buf, buff, length);
+
+	//===========================
+	char* write_test = (char*) malloc(BLOCK_SIZE);
+	memcpy(write_test, buf, length);
+	free(write_test);
+	//==============================
+
 	if (write_blocks(blk_index, 1, buf) < 0){
 			free(buf);
 			return -1;
@@ -568,6 +575,13 @@ int write_full_blk(char* buff, int i_blk_index, int inode_index){
 	if (write_blocks(blk_index, 1, buff) < 0){
 		return -1;
 	}
+
+	//===========================
+	char* write_test = (char*) malloc(BLOCK_SIZE);
+	memcpy(write_test, buff, BLOCK_SIZE);
+	free(write_test);
+	//==============================
+
 	return return_val;
 }
 
@@ -582,6 +596,13 @@ int write_part_blk_from_mid(int offset, char* buff, int blk_index, int length){
 		free(buf);
 		return -2;
 	}
+
+	//===========================
+	char* write_test = (char*) malloc(BLOCK_SIZE);
+	memcpy(write_test, buf, BLOCK_SIZE);
+	free(write_test);
+	//==============================
+
 	free(buf);
 	return 0;
 }
@@ -596,6 +617,11 @@ int read_block(char* buf, int offset, int rest, inode* finode, int i_blk_index){
 	char* buff = (char*) malloc(BLOCK_SIZE);
 	read_blocks(blk_index, 1, buff);
 	memcpy(buf, buff+offset, BLOCK_SIZE - offset - rest);
+	//=======for test==========
+	char* test_read = (char*) malloc(BLOCK_SIZE);
+	memcpy(test_read,  buff+offset, BLOCK_SIZE - offset - rest);
+	free(test_read);
+	//=========================
 	return 0;
 }
 
@@ -858,8 +884,8 @@ int sfs_fwrite(int fileID, char *buf, int length){
 	for(int i = 0; i<blk_num; i++){
 		if (write_full_blk(bufp + i*BLOCK_SIZE, i_blk_index, inode_index)==2){
 			update++;
-			i_blk_index++;
 		}
+		i_blk_index++;
 	}
 	rest_len -= blk_num * BLOCK_SIZE;
 	if (write_part_blk_from_beginning(bufp + blk_num*BLOCK_SIZE, i_blk_index, inode_index, rest_len) == 2){
