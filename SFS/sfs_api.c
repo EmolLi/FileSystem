@@ -303,8 +303,6 @@ void update_disk_dir(int dir_index){
 	memcpy(buff, dirC, BLOCK_SIZE);
 	block_index = ((&(inode_tableC[0]))->direct_ptr)[0];
 	write_blocks(DATA_BLOCK_INDEX + block_index, 1, buff);
-	//test
-	read_blocks(201,1,buff);
 
 	free(buff);
 
@@ -634,28 +632,8 @@ int read_block(char* buf, int offset, int rest, inode* finode, int i_blk_index){
 		printf("Error in reading block.\n");
 	}
 	char* buff = (char*) malloc(BLOCK_SIZE);
-
-	//=====================
-	read_blocks(201,1,buff);
-	//=======================
-
 	read_blocks(blk_index, 1, buff);
-
-
-
-
-	//===================
-	char* test =(char*) malloc(1024);
-	read_blocks(201,1,test);
-	free(test);
-	//===================
-
 	memcpy(buf, buff+offset, BLOCK_SIZE - offset - rest);
-	//=======for test==========
-	char* test_read = (char*) malloc(BLOCK_SIZE);
-	memcpy(test_read,  buff+offset, BLOCK_SIZE - offset - rest);
-	free(test_read);
-	//=========================
 	return 0;
 }
 
@@ -724,12 +702,6 @@ void mksfs(int fresh){
 
 //return file ID;
 int sfs_get_next_file_name(char *fname){
-	//===================
-	char* buff =(char*) malloc(1024);
-	read_blocks(201,1,buff);
-	free(buff);
-	//===================
-
 	if (dirC->file_num == 0){
 		printf("No file in dir.\n");
 		return 0;
@@ -783,12 +755,6 @@ int sfs_get_file_size(char* path){
 
 //return file ID
 int sfs_fopen(char *name){
-	//===================
-	char* buff =(char*) malloc(1024);
-	read_blocks(201,1,buff);
-	free(buff);
-	//===================
-
 	if (oft->cnt >= OPEN_FILE_TABLE_SIZE ){
 		printf("Too many files opened!\n");
 		return -2;
@@ -837,12 +803,6 @@ int sfs_fclose(int fileID){
 }
 
 int sfs_frseek(int fileID, int loc){
-	//===================
-	char* buff =(char*) malloc(1024);
-	read_blocks(201,1,buff);
-	free(buff);
-	//===================
-
 	if(fileID<0 || fileID >= DIR_SIZE){
 		return -1;
 	}
@@ -866,11 +826,6 @@ int sfs_frseek(int fileID, int loc){
 }
 
 int sfs_fwseek(int fileID, int loc){
-	//===================
-	char* buff =(char*) malloc(1024);
-	read_blocks(201,1,buff);
-	free(buff);
-	//===================
 	if(fileID<0 || fileID >= DIR_SIZE){
 		return -1;
 	}
@@ -985,14 +940,6 @@ int sfs_fwrite(int fileID, char *buf, int length){
 }
 
 int sfs_fread(int fileID, char *buf, int length){
-
-	//===================
-	char* test =(char*) malloc(1024);
-	read_blocks(201,1,test);
-	free(test);
-	//===================
-
-
 	if(fileID<0 || fileID >= DIR_SIZE){
 		return -1;
 	}
@@ -1014,13 +961,6 @@ int sfs_fread(int fileID, char *buf, int length){
 		return -1;
 	}
 
-	//===================
-	test =(char*) malloc(1024);
-	read_blocks(201,1,test);
-	free(test);
-	//===================
-
-
 	if (length + rp > finode->size){
 			length = finode->size - rp;
 		}
@@ -1029,14 +969,6 @@ int sfs_fread(int fileID, char *buf, int length){
 	if (rest>=0){
 		//one block is enough
 		read_block(buf, offset, rest, finode, i_blk_index);
-
-
-
-		//===================
-		char* test =(char*) malloc(1024);
-		read_blocks(201,1,test);
-		free(test);
-		//===================
 
 	}
 
